@@ -20,6 +20,7 @@ const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'https://n8n.lukeapp.me/w
 
 let sock = null;
 let connectionState = 'disconnected';
+let latestQr = null;
 
 async function connectToWhatsApp() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
@@ -37,6 +38,7 @@ async function connectToWhatsApp() {
     const { connection, lastDisconnect, qr } = update;
     
     if (qr) {
+      latestQr = qr;
       console.log('\n--- ESCANEA ESTE CÓDIGO QR PARA CONECTAR WHATSAPP ---');
       qrcode.generate(qr, { small: true });
     }
@@ -52,6 +54,7 @@ async function connectToWhatsApp() {
       }
     } else if (connection === 'open') {
       connectionState = 'connected';
+      latestQr = null; // Clear QR code since we are connected
       console.log('¡Conexión establecida con éxito con WhatsApp!');
     } else if (connection === 'connecting') {
       connectionState = 'connecting';
@@ -96,6 +99,11 @@ async function connectToWhatsApp() {
 }
 
 // --- API Endpoints ---
+
+// Obtener QR
+app.get('/qr', (req, res) => {
+  res.json({ success: true, qr: latestQr, status: connectionState });
+});
 
 // Obtener estado
 app.get('/status', (req, res) => {
