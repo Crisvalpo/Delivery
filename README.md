@@ -94,7 +94,7 @@ Abre el enlace ➡️ Arma su pedido con la UI accesible ➡️ Presiona "Confir
 
 ## 🖥️ Gestión del Servidor y Puertos
 
-Para maximizar el rendimiento del servidor Asus de 4GB de RAM, se detuvieron los servicios de desarrollo/prueba que no estaban en producción real:
+Para maximizar el rendimiento del servidor Asus de 4GB de RAM, la infraestructura de producción de este proyecto consta de los siguientes servicios activos:
 
 ### 📊 Servicios Activos
 | ID (PM2) | Nombre del Proceso | Puerto | Rol / Descripción |
@@ -102,15 +102,8 @@ Para maximizar el rendimiento del servidor Asus de 4GB de RAM, se detuvieron los
 | **5** | `luke-delivery-prod` | `3010` | Aplicación web principal (Next.js) |
 | **6** | `luke-wa-bridge` | `3015` | Microservicio de WhatsApp (Baileys) |
 | **1** | `deploy-webhook` | `9000` | Webhook de despliegue automático de Git |
-| **3** | `andina-dashboard` | `3005` | Panel administrativo de Andina |
-| **2** | `jaime-agent` | — | Agente bot de Telegram |
 | **Docker**| `n8n` | `5678` | Motor de flujos de automatización |
 | **Docker**| `supabase-stack` | `8000` / `54323` | Base de datos PostgreSQL y Studio administrador |
-
-### 🛑 Servicios Inactivos (Detenidos para ahorrar memoria)
-*   **`lukeapp-prod`** (lukeappv3) - PM2 ID 0 (Puerto 3000) 🚫 *Detenido*
-*   **`ruleta-prod`** (ruleta) - PM2 ID 4 (Puerto 3003) 🚫 *Detenido*
-*   **`lukequiz`** (Contenedor Docker en puerto 3002) 🚫 *Detenido*
 
 ---
 
