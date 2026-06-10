@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
+import { Atkinson_Hyperlegible_Next } from "next/font/google";
 import { createClient } from "@/lib/supabase/client";
 import {
   MapPin,
@@ -14,7 +15,14 @@ import {
   Loader2,
   Check,
   AlertCircle,
+  ChevronDown,
 } from "lucide-react";
+
+const atkinson = Atkinson_Hyperlegible_Next({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  display: "swap",
+});
 
 export default function RegistroPage() {
   const router = useRouter();
@@ -151,7 +159,7 @@ export default function RegistroPage() {
   };
 
   return (
-    <div className="min-h-screen bg-bg-app flex flex-col justify-center px-4 py-8">
+    <div className={`min-h-screen bg-bg-app flex flex-col justify-center px-4 py-8 ${atkinson.className}`}>
       <Head>
         <title>Registrar mi Almacén | LukeDelivery</title>
         <meta
@@ -268,17 +276,22 @@ export default function RegistroPage() {
               <label className="block text-base font-bold text-text-primary mb-2">
                 Sector / Barrio *
               </label>
-              <select
-                value={sector}
-                onChange={(e) => setSector(e.target.value)}
-                className="w-full bg-bg-surface-2 border-2 border-border focus:border-brand rounded-2xl py-3.5 px-4 text-base font-bold text-text-primary transition-colors outline-none cursor-pointer"
-              >
-                {sectores.map((sec) => (
-                  <option key={sec} value={sec} className="bg-bg-surface text-text-primary text-base font-medium">
-                    {sec}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={sector}
+                  onChange={(e) => setSector(e.target.value)}
+                  className="w-full appearance-none bg-bg-surface-2 border-2 border-border focus:border-brand rounded-2xl py-3.5 px-4 pr-12 text-base font-bold text-text-primary transition-colors outline-none cursor-pointer"
+                >
+                  {sectores.map((sec) => (
+                    <option key={sec} value={sec} className="bg-bg-surface text-text-primary text-base font-medium">
+                      {sec}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
+                  <ChevronDown className="h-5 w-5 text-text-secondary" />
+                </div>
+              </div>
             </div>
 
             {/* GEOLOCALIZACIÓN GPS */}
@@ -353,8 +366,18 @@ export default function RegistroPage() {
         )}
       </div>
 
-      <div className="text-center mt-6 text-xs font-medium text-text-secondary">
-        <p>LukeDelivery B2B — Placilla & Curauma</p>
+      <div className="text-center mt-6 space-y-1.5">
+        <p className="text-xs font-medium text-text-secondary">LukeDelivery B2B — Placilla & Curauma</p>
+        <p className="text-xs text-text-secondary">
+          ¿Necesitas ayuda?{" "}
+          <a
+            href="tel:+56912345678"
+            className="text-brand font-bold hover:text-brand-hover transition-colors inline-flex items-center gap-1"
+          >
+            <Phone className="h-3 w-3" />
+            Llámanos al +56 9 1234 5678
+          </a>
+        </p>
       </div>
     </div>
   );
