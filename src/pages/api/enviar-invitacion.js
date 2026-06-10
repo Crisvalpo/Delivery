@@ -29,7 +29,7 @@ export default async function handler(req, res) {
 
   const messageText = `¡Hola ${nombreFormateado}! Te saluda Cristian de *LukeDelivery B2B* 📦. 
 
-Fue un gusto conversar contigo hoy sobre nuestro modelo de distribución al costo real de distribuidor. 
+Fue un gusto conversar contigo hoy sobre nuestro modelo de distribución y el *catálogo de ofertas* de distribuidor. 
 
 Te comparto el enlace para que puedas registrar tu negocio y activar tu catálogo de compras de forma totalmente gratuita y segura:
 
