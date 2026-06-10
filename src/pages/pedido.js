@@ -107,6 +107,7 @@ export default function PedidoPage() {
           .from("productos")
           .select("*")
           .eq("disponible", true)
+          .eq("activo", true)
           .order("nombre");
 
         if (pgErr) throw pgErr;
@@ -308,90 +309,113 @@ export default function PedidoPage() {
             </p>
           </div>
         ) : !tokenError && (
-          /* ===== PRODUCT LIST ===== */
-          <div className="space-y-4">
-            {productosFiltrados.map((p) => {
-              const cant = carrito[p.id] || 0;
-              const isActive = cant > 0;
+          /* ===== PRODUCT LIST AGROUPED BY CATEGORY ===== */
+          <div className="space-y-8 animate-fade-in">
+            {catsPermitidas.map((catName) => {
+              const prodsDeCat = productosFiltrados.filter(
+                (p) => cleanCat(p.categoria || "Abarrotes") === cleanCat(catName)
+              );
+
+              if (prodsDeCat.length === 0) return null;
 
               return (
-                <div
-                  key={p.id}
-                  className={`bg-white border-2 rounded-xl p-4 mb-4 flex items-center gap-4 transition-all ${
-                    isActive
-                      ? "border-brand/60 shadow-lg shadow-brand/5"
-                      : "border-gray-200"
-                  }`}
-                >
-                  {/* Imagen */}
-                  <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden shrink-0 bg-gray-100 border border-gray-200">
-                    {p.url_imagen_retail ? (
-                      <img
-                        src={p.url_imagen_retail}
-                        alt={p.nombre}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.style.display = "none";
-                        }}
-                      />
-                    ) : (
-                      <div className="h-full w-full flex items-center justify-center text-brand font-black text-2xl">
-                        {p.nombre.charAt(0)}
-                      </div>
-                    )}
-                    {p.categoria_logistica === "Pesado" && (
-                      <div className="absolute top-0 left-0 bg-accent text-black text-[9px] font-black px-2 py-0.5 rounded-br-lg uppercase">
-                        PESADO
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-bold text-gray-800 leading-snug break-words">
-                      {p.nombre}
-                    </h3>
-                    <div className="mt-1">
-                      <span className="inline-block bg-gray-100 text-gray-700 text-xs font-semibold px-2.5 py-0.5 rounded-md border border-gray-200">
-                        {p.formato_venta}
-                      </span>
-                    </div>
-                    <p className="text-lg font-black text-gray-900 mt-2">
-                      {fmt(p.precio)}
-                      <span className="text-xs text-gray-500 font-medium ml-1.5">
-                        costo real
-                      </span>
-                    </p>
-                  </div>
-
-                  {/* Selector [-] N [+] */}
-                  <div className="flex items-center bg-gray-100 rounded-xl border-2 border-gray-300 shrink-0 h-14 overflow-hidden">
-                    <button
-                      onClick={() => setCantidad(p.id, -1)}
-                      disabled={cant === 0}
-                      className={`h-14 w-14 flex items-center justify-center transition-all cursor-pointer font-bold ${
-                        cant === 0
-                          ? "text-gray-400 bg-gray-200/50 cursor-not-allowed"
-                          : "text-gray-800 bg-gray-200 hover:bg-gray-300 active:scale-90"
-                      }`}
-                    >
-                      <Minus className="h-6 w-6 stroke-[3]" />
-                    </button>
-                    <span
-                      className={`w-12 text-center text-xl font-bold px-1 select-none ${
-                        isActive ? "text-brand" : "text-gray-700"
-                      }`}
-                    >
-                      {cant}
+                <div key={catName} className="mb-6">
+                  {/* Category Header */}
+                  <h2 className="text-xl font-extrabold text-gray-800 mb-4 border-b-2 border-gray-200 pb-2 flex items-center justify-between">
+                    <span>{catName}</span>
+                    <span className="text-xs bg-brand/10 text-brand px-2.5 py-0.5 rounded-full font-bold">
+                      {prodsDeCat.length} {prodsDeCat.length === 1 ? 'producto' : 'productos'}
                     </span>
-                    <button
-                      onClick={() => setCantidad(p.id, 1)}
-                      className="h-14 w-14 flex items-center justify-center text-gray-800 bg-gray-200 hover:bg-gray-300 active:scale-90 font-bold transition-all cursor-pointer"
-                    >
-                      <Plus className="h-6 w-6 stroke-[3]" />
-                    </button>
+                  </h2>
+
+                  {/* Category Products */}
+                  <div className="space-y-4">
+                    {prodsDeCat.map((p) => {
+                      const cant = carrito[p.id] || 0;
+                      const isActive = cant > 0;
+
+                      return (
+                        <div
+                          key={p.id}
+                          className={`bg-white border-2 rounded-xl p-4 mb-4 flex items-center gap-4 transition-all ${
+                            isActive
+                              ? "border-brand/60 shadow-lg shadow-brand/5"
+                              : "border-gray-200"
+                          }`}
+                        >
+                          {/* Imagen */}
+                          <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden shrink-0 bg-gray-100 border border-gray-200">
+                            {p.url_imagen_retail ? (
+                              <img
+                                src={p.url_imagen_retail}
+                                alt={p.nombre}
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.style.display = "none";
+                                }}
+                              />
+                            ) : (
+                              <div className="h-full w-full flex items-center justify-center text-brand font-black text-2xl">
+                                {p.nombre.charAt(0)}
+                              </div>
+                            )}
+                            {p.categoria_logistica === "Pesado" && (
+                              <div className="absolute top-0 left-0 bg-accent text-black text-[9px] font-black px-2 py-0.5 rounded-br-lg uppercase">
+                                PESADO
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-lg font-bold text-gray-800 leading-snug break-words">
+                              {p.nombre}
+                            </h3>
+                            <div className="mt-1">
+                              <span className="inline-block bg-gray-100 text-gray-700 text-xs font-semibold px-2.5 py-0.5 rounded-md border border-gray-200">
+                                {p.formato_venta}
+                              </span>
+                            </div>
+                            <p className="text-lg font-black text-gray-900 mt-2">
+                              {fmt(p.precio)}
+                              <span className="text-xs text-gray-500 font-medium ml-1.5">
+                                costo real
+                              </span>
+                            </p>
+                          </div>
+
+                          {/* Selector [-] N [+] */}
+                          <div className="flex items-center bg-gray-100 rounded-xl border-2 border-gray-300 shrink-0 h-14 overflow-hidden">
+                            <button
+                              onClick={() => setCantidad(p.id, -1)}
+                              disabled={cant === 0}
+                              className={`h-14 w-14 flex items-center justify-center transition-all cursor-pointer font-bold ${
+                                cant === 0
+                                  ? "text-gray-400 bg-gray-200/50 cursor-not-allowed"
+                                  : "text-gray-800 bg-gray-200 hover:bg-gray-300 active:scale-90"
+                              }`}
+                            >
+                              <Minus className="h-6 w-6 stroke-[3]" />
+                            </button>
+                            <span
+                              className={`w-12 text-center text-xl font-bold px-1 select-none ${
+                                isActive ? "text-brand" : "text-gray-700"
+                              }`}
+                            >
+                              {cant}
+                            </span>
+                            <button
+                              onClick={() => setCantidad(p.id, 1)}
+                              className="h-14 w-14 flex items-center justify-center text-gray-800 bg-gray-200 hover:bg-gray-300 active:scale-90 font-bold transition-all cursor-pointer"
+                            >
+                              <Plus className="h-6 w-6 stroke-[3]" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );

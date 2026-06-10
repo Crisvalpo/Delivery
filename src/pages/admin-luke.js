@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Package,
   Edit,
+  Trash,
 } from "lucide-react";
 
 // Coordenadas centrales de Placilla de Peñuelas
@@ -137,6 +138,7 @@ export default function AdminLukePage() {
       const { data: prodData, error: prodError } = await supabase
         .from("productos")
         .select("*")
+        .eq("activo", true)
         .order("nombre", { ascending: true });
 
       if (prodError) throw prodError;
@@ -525,6 +527,27 @@ export default function AdminLukePage() {
     } catch (err) {
       console.error("[AdminLuke] Error al cambiar disponibilidad:", err);
       alert("Error al cambiar la disponibilidad del producto.");
+    }
+  };
+
+  // --- Soft Delete de Producto ---
+  const handleSoftDeleteProducto = async (producto) => {
+    const confirmacion = window.confirm(`¿Seguro que deseas eliminar "${producto.nombre}" del catálogo?`);
+    if (!confirmacion) return;
+
+    try {
+      const { error } = await supabase
+        .from("productos")
+        .update({ activo: false })
+        .eq("id", producto.id);
+
+      if (error) throw error;
+      
+      // Refrescar datos
+      await fetchClientes();
+    } catch (err) {
+      console.error("[AdminLuke] Error al eliminar producto:", err);
+      alert("Error al eliminar el producto.");
     }
   };
 
@@ -1131,7 +1154,7 @@ export default function AdminLukePage() {
           />
 
           {/* Modal Container */}
-          <div className="relative bg-bg-surface border border-border rounded-2xl w-full sm:max-w-4xl max-h-[90vh] sm:max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-fade-in z-[9999]">
+          <div className="relative bg-bg-surface border-2 border-border rounded-2xl w-full sm:max-w-5xl max-h-[90vh] sm:max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-fade-in z-[9999]">
             {/* Header */}
             <div className="p-5 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -1175,28 +1198,35 @@ export default function AdminLukePage() {
                     {productos.map((prod) => (
                       <div key={prod.id} className="bg-bg-surface-2 border border-border/60 rounded-2xl p-4 flex flex-col gap-3">
                         <div className="flex items-center gap-3">
-                          {prod.url_imagen_retail ? (
-                            <img
-                              src={prod.url_imagen_retail}
-                              alt={cleanText(prod.nombre)}
-                              className="w-12 h-12 rounded-xl object-cover bg-bg-surface-3"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-xl bg-bg-surface-3 flex items-center justify-center shrink-0">
+                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-bg-surface-3 flex items-center justify-center shrink-0 border border-border">
+                            {prod.url_imagen_retail ? (
+                              <img
+                                src={prod.url_imagen_retail}
+                                alt={cleanText(prod.nombre)}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
                               <Package className="h-6 w-6 text-text-dim" />
-                            </div>
-                          )}
+                            )}
+                          </div>
                           <div className="flex-1 min-w-0">
                             <h4 className="font-bold text-sm text-text-primary truncate">{cleanText(prod.nombre)}</h4>
                             <p className="text-xs text-text-dim">{cleanText(prod.formato_venta)}</p>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <button
                               onClick={() => handleOpenProductForm(prod)}
-                              className="p-2 rounded-xl bg-bg-surface border border-border text-text-secondary hover:text-brand hover:border-brand/40 transition-colors cursor-pointer"
+                              className="p-2 rounded-xl bg-bg-surface border border-border text-text-secondary hover:text-brand hover:border-brand/40 transition-colors cursor-pointer inline-flex items-center justify-center"
                               title="Editar producto"
                             >
                               <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleSoftDeleteProducto(prod)}
+                              className="p-2 rounded-xl bg-bg-surface border border-border text-red-400 hover:text-red-300 hover:border-red-500/40 transition-colors cursor-pointer inline-flex items-center justify-center"
+                              title="Eliminar producto"
+                            >
+                              <Trash className="h-4 w-4" />
                             </button>
                           </div>
                         </div>
@@ -1243,37 +1273,37 @@ export default function AdminLukePage() {
 
                   {/* Vista Desktop: Tabla Tradicional */}
                   <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full text-left text-xs text-text-secondary border-collapse">
+                    <table className="w-full text-left text-xs text-text-secondary border-collapse table-fixed">
                       <thead>
                         <tr className="border-b border-border text-text-dim uppercase tracking-wider text-[9px] font-bold">
-                          <th className="pb-3 pl-2">Imagen</th>
-                          <th className="pb-3">Nombre</th>
-                          <th className="pb-3">Formato</th>
-                          <th className="pb-3">Precio Venta</th>
-                          <th className="pb-3">Costo</th>
-                          <th className="pb-3">Categoría</th>
-                          <th className="pb-3 text-center">Disponible</th>
-                          <th className="pb-3 text-right pr-2">Acciones</th>
+                          <th className="pb-3 pl-2 w-14">Imagen</th>
+                          <th className="pb-3 w-[35%]">Nombre</th>
+                          <th className="pb-3 w-[15%]">Formato</th>
+                          <th className="pb-3 w-24">Precio Venta</th>
+                          <th className="pb-3 w-24">Costo</th>
+                          <th className="pb-3 w-28">Categoría</th>
+                          <th className="pb-3 w-24 text-center">Disponible</th>
+                          <th className="pb-3 w-24 text-right pr-2">Acciones</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border/40">
                         {productos.map((prod) => (
                           <tr key={prod.id} className="hover:bg-bg-surface-2/30 transition-colors">
                             <td className="py-3 pl-2">
-                              {prod.url_imagen_retail ? (
-                                <img
-                                  src={prod.url_imagen_retail}
-                                  alt={cleanText(prod.nombre)}
-                                  className="w-8 h-8 rounded-lg object-cover bg-bg-surface-2"
-                                />
-                              ) : (
-                                <div className="w-8 h-8 rounded-lg bg-bg-surface-2 flex items-center justify-center">
-                                  <Package className="h-4 w-4 text-text-dim" />
-                                </div>
-                              )}
+                              <div className="w-10 h-10 rounded-xl overflow-hidden bg-bg-surface-2 border border-border flex items-center justify-center shrink-0">
+                                {prod.url_imagen_retail ? (
+                                  <img
+                                    src={prod.url_imagen_retail}
+                                    alt={cleanText(prod.nombre)}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <Package className="h-5 w-5 text-text-dim" />
+                                )}
+                              </div>
                             </td>
-                            <td className="py-3 font-semibold text-text-primary">{cleanText(prod.nombre)}</td>
-                            <td className="py-3">{cleanText(prod.formato_venta)}</td>
+                            <td className="py-3 font-semibold text-text-primary pr-3 leading-relaxed break-words">{cleanText(prod.nombre)}</td>
+                            <td className="py-3 pr-3 font-medium text-text-secondary break-words">{cleanText(prod.formato_venta)}</td>
                             <td className="py-3 font-bold text-text-primary">${prod.precio.toLocaleString("es-CL")}</td>
                             <td className="py-3 text-text-dim">${prod.precio_costo.toLocaleString("es-CL")}</td>
                             <td className="py-3">
@@ -1300,13 +1330,22 @@ export default function AdminLukePage() {
                               </button>
                             </td>
                             <td className="py-3 text-right pr-2">
-                              <button
-                                onClick={() => handleOpenProductForm(prod)}
-                                className="p-1.5 rounded-lg bg-bg-surface-2 border border-border text-text-secondary hover:text-brand hover:border-brand/40 transition-colors cursor-pointer inline-flex items-center justify-center"
-                                title="Editar producto"
-                              >
-                                <Edit className="h-3.5 w-3.5" />
-                              </button>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => handleOpenProductForm(prod)}
+                                  className="p-1.5 rounded-lg bg-bg-surface border border-border text-text-secondary hover:text-brand hover:border-brand/40 transition-colors cursor-pointer inline-flex items-center justify-center"
+                                  title="Editar producto"
+                                >
+                                  <Edit className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleSoftDeleteProducto(prod)}
+                                  className="p-1.5 rounded-lg bg-bg-surface border border-border text-red-400 hover:text-red-300 hover:border-red-500/40 transition-colors cursor-pointer inline-flex items-center justify-center"
+                                  title="Eliminar producto"
+                                >
+                                  <Trash className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
