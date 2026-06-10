@@ -43,6 +43,9 @@ CREATE POLICY "Lectura pública de clientes" ON public.clientes
 CREATE POLICY "Inserción pública de clientes" ON public.clientes
     FOR INSERT TO public WITH CHECK (true);
 
+CREATE POLICY "Modificación pública de clientes" ON public.clientes
+    FOR UPDATE TO public USING (true);
+
 -- =============================================
 -- Datos semilla para pruebas
 -- =============================================
