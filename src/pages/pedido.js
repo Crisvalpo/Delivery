@@ -39,9 +39,31 @@ export default function PedidoPage() {
 
   const supabase = createClient();
 
+  // Lógica de normalización tolerante para resolver problemas de codificación de la base de datos
+  const cleanKey = (str) => {
+    if (!str) return "almacen";
+    return str.replace(/[^a-zA-Z]/g, "").toLowerCase();
+  };
+
+  const getCatsPermitidas = (tipoNegocio) => {
+    const key = cleanKey(tipoNegocio);
+    if (key.includes("botill")) return CATEGORIAS_COMPATIBLES["Botillería"];
+    if (key.includes("fiambr")) return CATEGORIAS_COMPATIBLES["Fiambrería"];
+    if (key.includes("minim")) return CATEGORIAS_COMPATIBLES["Minimarket"];
+    return CATEGORIAS_COMPATIBLES["Almacén"];
+  };
+
+  const cleanCat = (catName) => {
+    if (!catName) return "abarrotes";
+    return catName.replace(/[^a-zA-Z]/g, "").toLowerCase();
+  };
+
   const tipo = clienteInfo?.tipo_negocio || "Almacén";
-  const catsPermitidas = CATEGORIAS_COMPATIBLES[tipo] || ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"];
-  const productosFiltrados = productos.filter((p) => catsPermitidas.includes(p.categoria || "Abarrotes"));
+  const catsPermitidas = getCatsPermitidas(tipo);
+  const productosFiltrados = productos.filter((p) => {
+    const pCat = cleanCat(p.categoria || "Abarrotes");
+    return catsPermitidas.some(c => cleanCat(c) === pCat);
+  });
 
   // --- Carga de productos e inicialización de sesión ---
   useEffect(() => {
@@ -316,7 +338,7 @@ export default function PedidoPage() {
           </div>
         ) : !tokenError && (
           /* ===== PRODUCT LIST ===== */
-          <div className="space-y-3">
+          <div className="space-y-4">
             {productosFiltrados.map((p) => {
               const cant = carrito[p.id] || 0;
               const isActive = cant > 0;
@@ -324,14 +346,14 @@ export default function PedidoPage() {
               return (
                 <div
                   key={p.id}
-                  className={`bg-bg-surface border-2 rounded-2xl p-4 flex items-center gap-4 transition-all ${
+                  className={`bg-white border-2 rounded-xl p-4 mb-4 flex items-center gap-4 transition-all ${
                     isActive
                       ? "border-brand/60 shadow-lg shadow-brand/5"
-                      : "border-border"
+                      : "border-gray-200"
                   }`}
                 >
                   {/* Imagen */}
-                  <div className="relative h-[70px] w-[70px] rounded-2xl overflow-hidden shrink-0 bg-bg-surface-2 border border-border">
+                  <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden shrink-0 bg-gray-100 border border-gray-200">
                     {p.url_imagen_retail ? (
                       <img
                         src={p.url_imagen_retail}
@@ -344,7 +366,7 @@ export default function PedidoPage() {
                         }}
                       />
                     ) : (
-                      <div className="h-full w-full flex items-center justify-center text-brand font-black text-xl">
+                      <div className="h-full w-full flex items-center justify-center text-brand font-black text-2xl">
                         {p.nombre.charAt(0)}
                       </div>
                     )}
@@ -357,13 +379,15 @@ export default function PedidoPage() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-extrabold text-text-primary truncate leading-snug">
+                    <h3 className="text-lg font-bold text-gray-800 leading-snug break-words">
                       {p.nombre}
                     </h3>
-                    <p className="text-xs text-text-secondary mt-0.5 font-semibold">
-                      {p.formato_venta}
-                    </p>
-                    <p className="text-base font-black text-text-primary mt-1">
+                    <div className="mt-1">
+                      <span className="inline-block bg-gray-100 text-gray-700 text-xs font-semibold px-2.5 py-0.5 rounded-md border border-gray-200">
+                        {p.formato_venta}
+                      </span>
+                    </div>
+                    <p className="text-base font-black text-text-primary mt-1.5">
                       {fmt(p.precio)}
                       <span className="text-[10px] text-text-dim font-normal ml-1.5">
                         costo real
@@ -372,30 +396,30 @@ export default function PedidoPage() {
                   </div>
 
                   {/* Selector [-] N [+] */}
-                  <div className="flex items-center bg-bg-surface-2 rounded-xl border-2 border-border shrink-0 h-12 overflow-hidden">
+                  <div className="flex items-center bg-gray-100 rounded-xl border-2 border-gray-300 shrink-0 h-14 overflow-hidden">
                     <button
                       onClick={() => setCantidad(p.id, -1)}
                       disabled={cant === 0}
-                      className={`h-11 w-11 flex items-center justify-center transition-all cursor-pointer ${
+                      className={`h-14 w-14 flex items-center justify-center transition-all cursor-pointer font-bold ${
                         cant === 0
-                          ? "text-text-dim cursor-not-allowed"
-                          : "text-text-primary hover:bg-bg-surface-hover active:scale-90"
+                          ? "text-gray-400 bg-gray-200/50 cursor-not-allowed"
+                          : "text-gray-800 bg-gray-200 hover:bg-gray-300 active:scale-90"
                       }`}
                     >
-                      <Minus className="h-5 w-5" />
+                      <Minus className="h-6 w-6 stroke-[3]" />
                     </button>
                     <span
-                      className={`w-9 text-center text-base font-black ${
-                        isActive ? "text-brand" : "text-text-dim"
+                      className={`w-12 text-center text-xl font-bold px-1 select-none ${
+                        isActive ? "text-brand" : "text-gray-700"
                       }`}
                     >
                       {cant}
                     </span>
                     <button
                       onClick={() => setCantidad(p.id, 1)}
-                      className="h-11 w-11 flex items-center justify-center text-text-primary hover:bg-bg-surface-hover active:scale-90 transition-all cursor-pointer"
+                      className="h-14 w-14 flex items-center justify-center text-gray-800 bg-gray-200 hover:bg-gray-300 active:scale-90 font-bold transition-all cursor-pointer"
                     >
-                      <Plus className="h-5 w-5" />
+                      <Plus className="h-6 w-6 stroke-[3]" />
                     </button>
                   </div>
                 </div>
@@ -407,21 +431,21 @@ export default function PedidoPage() {
 
       {/* ===== STICKY FOOTER: REGLA DEL FURGÓN ===== */}
       {!tokenError && !loading && productosFiltrados.length > 0 && (
-        <footer className="fixed bottom-0 inset-x-0 bg-bg-surface/95 backdrop-blur-xl border-t border-border py-5 px-5 z-40">
+        <footer className="fixed bottom-0 inset-x-0 bg-bg-surface/95 backdrop-blur-xl border-t border-border py-6 px-5 z-40">
           <div className="max-w-lg mx-auto">
             {/* Progress bar */}
             <div className="mb-4">
-              <div className="flex justify-between items-end text-[11px] mb-1.5">
+              <div className="flex justify-between items-end text-sm mb-1.5">
                 <span className="text-text-secondary font-bold uppercase tracking-wide">
                   Meta furgón: $35.000
                 </span>
                 <span
-                  className={`font-black text-sm ${cumpleMinimo ? "text-brand" : "text-accent"}`}
+                  className={`font-black text-base ${cumpleMinimo ? "text-brand" : "text-accent"}`}
                 >
                   {fmt(total)}
                 </span>
               </div>
-              <div className="h-2.5 w-full bg-bg-surface-2 rounded-full overflow-hidden">
+              <div className="h-3 w-full bg-bg-surface-2 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ${
                     cumpleMinimo ? "bg-brand" : "bg-accent"
@@ -438,7 +462,7 @@ export default function PedidoPage() {
               <button
                 onClick={handleConfirmar}
                 disabled={isSubmitting}
-                className="w-full bg-brand hover:bg-brand-hover active:scale-[0.97] text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all cursor-pointer shadow-lg shadow-brand/25 text-lg uppercase tracking-wide"
+                className="w-full py-4 text-lg font-bold rounded-xl shadow-lg bg-brand hover:bg-brand-hover active:scale-[0.97] text-white flex items-center justify-center gap-3 transition-all cursor-pointer shadow-brand/25 uppercase tracking-wide"
               >
                 {isSubmitting ? (
                   <>
@@ -451,12 +475,12 @@ export default function PedidoPage() {
                 )}
               </button>
             ) : (
-              <div className="w-full bg-bg-surface-2 border-2 border-border text-center py-5 rounded-2xl">
+              <div className="w-full bg-bg-surface-2 border-2 border-border text-center py-4 rounded-xl">
                 <span className="text-base font-bold text-text-dim">
                   Confirmar Pedido
                 </span>
                 {total > 0 && (
-                  <p className="text-[11px] text-accent font-black mt-1 uppercase tracking-wide">
+                  <p className="text-base font-semibold text-accent mt-1 uppercase tracking-wide">
                     Faltan {fmt(faltante)} para activar el furgón
                   </p>
                 )}
