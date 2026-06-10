@@ -208,74 +208,61 @@ export default function PedidoPage() {
         )}
       </header>
 
-      <main className="max-w-lg mx-auto px-4 pt-5">
-        {/* ===== BANNER ===== */}
-        <div className="bg-bg-surface border border-border rounded-2xl p-4 mb-5 relative overflow-hidden">
-          <div className="absolute -right-4 -top-4 opacity-[0.04]">
-            <Truck className="h-28 w-28 text-white" />
-          </div>
-          <h2 className="text-sm font-semibold text-text-primary mb-1.5 flex items-center gap-1.5">
-            <span>🚚</span> Flete Transparente
-          </h2>
-          <p className="text-xs text-text-secondary leading-relaxed">
-            Precio costo real del mayorista. Pedido mínimo{" "}
-            <span className="text-brand font-semibold">$35.000</span>. Flete:{" "}
-            <span className="text-text-primary font-medium">$3.000 base</span>{" "}
-            + $500/bulto pesado.
-          </p>
-        </div>
-
-        {/* ===== SUCCESS STATE ===== */}
-        {orderSuccess && (
-          <div className="bg-brand/5 border border-brand/20 rounded-2xl p-6 mb-5 text-center animate-fade-in">
-            <div className="mx-auto bg-brand/15 text-brand p-3 rounded-full w-fit mb-4">
-              <Check className="h-7 w-7" />
-            </div>
-            <h3 className="text-lg font-bold text-text-primary mb-1.5">
-              ¡Pedido Procesado!
-            </h3>
-            <p className="text-sm text-text-secondary mb-5">
-              Envía el resumen por WhatsApp para coordinar el despacho.
-            </p>
-
-            {/* Resumen */}
-            <div className="bg-bg-surface rounded-xl p-4 mb-5 border border-border text-left space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-text-secondary">Neto:</span>
-                <span className="text-text-primary font-semibold">
-                  {fmt(orderSummary.totalNeto)}
+      <main className="max-w-lg mx-auto px-4 pt-5 pb-36">
+        {/* ===== ACCESSIBLE INFORMATION CARD (SENIOR-OPTIMIZED) ===== */}
+        {!tokenError && !loading && (
+          <div className="grid grid-cols-1 gap-4 mb-6 animate-fade-in">
+            {/* Costo de Flete Card */}
+            <div className="bg-bg-surface border-2 border-border rounded-2xl p-5 text-center flex flex-col items-center">
+              <span className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-1">Costo de Flete Estimado</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-black text-brand">$</span>
+                <span className="text-5xl font-black text-text-primary leading-none">
+                  {(3000 + Object.entries(carrito).reduce((sum, [id, cant]) => {
+                    const p = productos.find(prod => prod.id === id);
+                    return sum + (p && p.categoria_logistica === "Pesado" ? 500 * cant : 0);
+                  }, 0)).toLocaleString("es-CL")}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-text-secondary">Flete:</span>
-                <span className="text-text-primary font-semibold">
-                  {fmt(orderSummary.flete)}
-                </span>
-              </div>
-              <div className="border-t border-border pt-2 flex justify-between text-sm font-bold">
-                <span className="text-brand">Total:</span>
-                <span className="text-brand">{fmt(orderSummary.totalPagar)}</span>
-              </div>
+              <p className="text-[11px] text-text-dim mt-2 leading-tight font-medium">
+                $3.000 base + $500 por bulto pesado. ¡Calculado automáticamente!
+              </p>
             </div>
 
-            <button
-              onClick={abrirWhatsApp}
-              className="w-full bg-[#25D366] hover:bg-[#20bd5a] active:scale-[0.97] text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-[#25D366]/20"
-            >
-              📲 Enviar por WhatsApp
-            </button>
-            <button
-              onClick={() => setOrderSuccess(false)}
-              className="mt-3 text-xs text-text-dim hover:text-text-secondary transition-colors cursor-pointer"
-            >
-              Crear otro pedido
-            </button>
+            {/* Meta del Furgón Card */}
+            <div className="bg-bg-surface border-2 border-border rounded-2xl p-5">
+              <div className="flex justify-between items-end mb-2">
+                <span className="text-xs font-bold text-text-secondary uppercase tracking-widest">Capacidad del Furgón</span>
+                <span className={`text-xs font-black ${cumpleMinimo ? "text-brand" : "text-accent"}`}>
+                  {Math.round(Math.min(100, (total / MONTO_MINIMO) * 100))}% completo
+                </span>
+              </div>
+              {/* Thick progress bar */}
+              <div className="w-full h-8 bg-bg-surface-2 rounded-full border border-border overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    cumpleMinimo ? "bg-brand" : "bg-accent"
+                  }`}
+                  style={{
+                    width: `${Math.min(100, (total / MONTO_MINIMO) * 100)}%`,
+                  }}
+                />
+              </div>
+              <div className="mt-3 flex items-center gap-2 text-xs font-bold text-text-primary">
+                <span>🚚</span>
+                <span>
+                  {cumpleMinimo
+                    ? "¡Meta alcanzada! Furgón listo para despacho."
+                    : `Faltan $${(MONTO_MINIMO - total).toLocaleString("es-CL")} para activar el despacho.`}
+                </span>
+              </div>
+            </div>
           </div>
         )}
 
         {/* ===== TOKEN ERROR (ACCESO DENEGADO) ===== */}
         {tokenError && (
-          <div className="bg-bg-surface border border-red-500/30 rounded-2xl p-6 text-center my-10 max-w-sm mx-auto shadow-xl">
+          <div className="bg-bg-surface border-2 border-red-500/30 rounded-2xl p-6 text-center my-10 max-w-sm mx-auto shadow-xl">
             <div className="mx-auto bg-red-500/10 text-red-500 p-4 rounded-full w-fit mb-4">
               <AlertTriangle className="h-10 w-10" />
             </div>
@@ -318,7 +305,7 @@ export default function PedidoPage() {
           </div>
         ) : !tokenError && (
           /* ===== PRODUCT LIST ===== */
-          <div className="space-y-2.5">
+          <div className="space-y-3">
             {productos.map((p) => {
               const cant = carrito[p.id] || 0;
               const isActive = cant > 0;
@@ -326,14 +313,14 @@ export default function PedidoPage() {
               return (
                 <div
                   key={p.id}
-                  className={`bg-bg-surface border rounded-2xl p-3 flex items-center gap-3 transition-all ${
+                  className={`bg-bg-surface border-2 rounded-2xl p-4 flex items-center gap-4 transition-all ${
                     isActive
-                      ? "border-brand/40 shadow-lg shadow-brand/5"
+                      ? "border-brand/60 shadow-lg shadow-brand/5"
                       : "border-border"
                   }`}
                 >
                   {/* Imagen */}
-                  <div className="relative h-[60px] w-[60px] rounded-xl overflow-hidden shrink-0 bg-bg-surface-2 border border-border">
+                  <div className="relative h-[70px] w-[70px] rounded-2xl overflow-hidden shrink-0 bg-bg-surface-2 border border-border">
                     {p.url_imagen_retail ? (
                       <img
                         src={p.url_imagen_retail}
@@ -346,12 +333,12 @@ export default function PedidoPage() {
                         }}
                       />
                     ) : (
-                      <div className="h-full w-full flex items-center justify-center text-brand font-bold text-lg">
+                      <div className="h-full w-full flex items-center justify-center text-brand font-black text-xl">
                         {p.nombre.charAt(0)}
                       </div>
                     )}
                     {p.categoria_logistica === "Pesado" && (
-                      <div className="absolute top-0 left-0 bg-accent text-black text-[8px] font-bold px-1.5 py-px rounded-br-lg">
+                      <div className="absolute top-0 left-0 bg-accent text-black text-[9px] font-black px-2 py-0.5 rounded-br-lg uppercase">
                         PESADO
                       </div>
                     )}
@@ -359,35 +346,35 @@ export default function PedidoPage() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold text-text-primary truncate leading-snug">
+                    <h3 className="text-base font-extrabold text-text-primary truncate leading-snug">
                       {p.nombre}
                     </h3>
-                    <p className="text-[11px] text-text-dim mt-0.5">
+                    <p className="text-xs text-text-secondary mt-0.5 font-semibold">
                       {p.formato_venta}
                     </p>
-                    <p className="text-sm font-bold text-text-primary mt-1">
+                    <p className="text-base font-black text-text-primary mt-1">
                       {fmt(p.precio)}
-                      <span className="text-[9px] text-text-dim font-normal ml-1">
+                      <span className="text-[10px] text-text-dim font-normal ml-1.5">
                         costo real
                       </span>
                     </p>
                   </div>
 
                   {/* Selector [-] N [+] */}
-                  <div className="flex items-center bg-bg-surface-2 rounded-xl border border-border shrink-0">
+                  <div className="flex items-center bg-bg-surface-2 rounded-xl border-2 border-border shrink-0 h-12 overflow-hidden">
                     <button
                       onClick={() => setCantidad(p.id, -1)}
                       disabled={cant === 0}
-                      className={`h-9 w-9 flex items-center justify-center rounded-l-xl transition-all cursor-pointer ${
+                      className={`h-11 w-11 flex items-center justify-center transition-all cursor-pointer ${
                         cant === 0
                           ? "text-text-dim cursor-not-allowed"
                           : "text-text-primary hover:bg-bg-surface-hover active:scale-90"
                       }`}
                     >
-                      <Minus className="h-3.5 w-3.5" />
+                      <Minus className="h-5 w-5" />
                     </button>
                     <span
-                      className={`w-8 text-center text-sm font-semibold ${
+                      className={`w-9 text-center text-base font-black ${
                         isActive ? "text-brand" : "text-text-dim"
                       }`}
                     >
@@ -395,9 +382,9 @@ export default function PedidoPage() {
                     </span>
                     <button
                       onClick={() => setCantidad(p.id, 1)}
-                      className="h-9 w-9 flex items-center justify-center rounded-r-xl text-text-primary hover:bg-bg-surface-hover active:scale-90 transition-all cursor-pointer"
+                      className="h-11 w-11 flex items-center justify-center text-text-primary hover:bg-bg-surface-hover active:scale-90 transition-all cursor-pointer"
                     >
-                      <Plus className="h-3.5 w-3.5" />
+                      <Plus className="h-5 w-5" />
                     </button>
                   </div>
                 </div>
@@ -409,64 +396,110 @@ export default function PedidoPage() {
 
       {/* ===== STICKY FOOTER: REGLA DEL FURGÓN ===== */}
       {!tokenError && !loading && productos.length > 0 && (
-        <footer className="fixed bottom-0 inset-x-0 bg-bg-surface/95 backdrop-blur-xl border-t border-border py-4 px-5 z-50">
-        <div className="max-w-lg mx-auto">
-          {/* Progress bar */}
-          <div className="mb-3">
-            <div className="flex justify-between items-end text-[11px] mb-1">
-              <span className="text-text-dim font-medium">
-                Meta furgón: $35.000
-              </span>
-              <span
-                className={`font-bold ${cumpleMinimo ? "text-brand" : "text-accent"}`}
-              >
-                {fmt(total)}
-              </span>
+        <footer className="fixed bottom-0 inset-x-0 bg-bg-surface/95 backdrop-blur-xl border-t border-border py-5 px-5 z-40">
+          <div className="max-w-lg mx-auto">
+            {/* Progress bar */}
+            <div className="mb-4">
+              <div className="flex justify-between items-end text-[11px] mb-1.5">
+                <span className="text-text-secondary font-bold uppercase tracking-wide">
+                  Meta furgón: $35.000
+                </span>
+                <span
+                  className={`font-black text-sm ${cumpleMinimo ? "text-brand" : "text-accent"}`}
+                >
+                  {fmt(total)}
+                </span>
+              </div>
+              <div className="h-2.5 w-full bg-bg-surface-2 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    cumpleMinimo ? "bg-brand" : "bg-accent"
+                  }`}
+                  style={{
+                    width: `${Math.min(100, (total / MONTO_MINIMO) * 100)}%`,
+                  }}
+                />
+              </div>
             </div>
-            <div className="h-1.5 w-full bg-bg-surface-2 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-300 ${
-                  cumpleMinimo ? "bg-brand" : "bg-accent"
-                }`}
-                style={{
-                  width: `${Math.min(100, (total / MONTO_MINIMO) * 100)}%`,
-                }}
-              />
-            </div>
-          </div>
 
-          {/* Botón */}
-          {cumpleMinimo ? (
-            <button
-              onClick={handleConfirmar}
-              disabled={isSubmitting}
-              className="w-full bg-brand hover:bg-brand-hover active:scale-[0.98] text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-brand/20"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" /> Procesando...
-                </>
-              ) : (
-                <>
-                  <ShoppingCart className="h-5 w-5" /> Confirmar Pedido por
-                  WhatsApp
-                </>
-              )}
-            </button>
-          ) : (
-            <div className="w-full bg-bg-surface-2 border border-border text-center py-3.5 rounded-xl">
-              <span className="text-sm font-semibold text-text-dim">
-                Confirmar Pedido
-              </span>
-              {total > 0 && (
-                <p className="text-[10px] text-accent font-medium mt-0.5">
-                  Faltan {fmt(faltante)} para activar el furgón
-                </p>
-              )}
+            {/* Botón */}
+            {cumpleMinimo ? (
+              <button
+                onClick={handleConfirmar}
+                disabled={isSubmitting}
+                className="w-full bg-brand hover:bg-brand-hover active:scale-[0.97] text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all cursor-pointer shadow-lg shadow-brand/25 text-lg uppercase tracking-wide"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-6 w-6 animate-spin" /> Procesando...
+                  </>
+                ) : (
+                  <>
+                    <ShoppingCart className="h-6 w-6" /> Confirmar Pedido por WhatsApp
+                  </>
+                )}
+              </button>
+            ) : (
+              <div className="w-full bg-bg-surface-2 border-2 border-border text-center py-5 rounded-2xl">
+                <span className="text-base font-bold text-text-dim">
+                  Confirmar Pedido
+                </span>
+                {total > 0 && (
+                  <p className="text-[11px] text-accent font-black mt-1 uppercase tracking-wide">
+                    Faltan {fmt(faltante)} para activar el furgón
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </footer>
+      )}
+
+      {/* ===== SUCCESS STATE (FULL SCREEN MODAL OVERLAY) ===== */}
+      {orderSuccess && (
+        <div className="fixed inset-0 z-50 bg-bg-app/95 backdrop-blur-md flex items-center justify-center p-5 text-center animate-fade-in">
+          <div className="bg-bg-surface border-4 border-brand rounded-[32px] p-8 max-w-md w-full shadow-2xl flex flex-col items-center gap-6">
+            <div className="bg-brand/10 text-brand p-5 rounded-full w-fit">
+              <Check className="h-16 w-16" />
             </div>
-          )}
+            <h2 className="text-2xl font-black text-text-primary leading-tight">
+              ¡Pedido Realizado con Éxito!
+            </h2>
+            <p className="text-base text-text-secondary leading-relaxed">
+              Tu pedido se ha procesado correctamente. Ahora debes enviar el resumen por WhatsApp para coordinar el flete y la entrega.
+            </p>
+
+            {/* Financial Summary */}
+            <div className="bg-bg-surface-2 w-full rounded-2xl p-5 border border-border text-left space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-text-secondary">Neto Mercadería:</span>
+                <span className="text-text-primary font-bold">{fmt(orderSummary.totalNeto)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-text-secondary">Flete Escalonado:</span>
+                <span className="text-text-primary font-bold">{fmt(orderSummary.flete)}</span>
+              </div>
+              <div className="border-t border-border pt-3 flex justify-between text-base font-black">
+                <span className="text-brand">TOTAL A PAGAR:</span>
+                <span className="text-brand">{fmt(orderSummary.totalPagar)}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={abrirWhatsApp}
+              className="w-full h-16 bg-[#25D366] hover:bg-[#20bd5a] active:scale-95 text-white text-lg font-black rounded-2xl flex items-center justify-center gap-3 transition-all cursor-pointer shadow-lg shadow-[#25D366]/25 uppercase tracking-wide"
+            >
+              📲 Enviar por WhatsApp
+            </button>
+            
+            <button
+              onClick={() => setOrderSuccess(false)}
+              className="text-sm text-text-dim hover:text-text-secondary font-bold underline transition-colors cursor-pointer"
+            >
+              Crear otro pedido / Volver
+            </button>
+          </div>
         </div>
-      </footer>
       )}
     </div>
   );
