@@ -183,7 +183,7 @@ export default function PedidoPage() {
   // --- Abrir WhatsApp ---
   const abrirWhatsApp = () => {
     if (!orderSummary) return;
-    const tel = "+56935264052";
+    const tel = "+56951875221";
 
     const items = orderSummary.items
       .map(
@@ -278,7 +278,7 @@ export default function PedidoPage() {
               {tokenError}
             </p>
             <a
-              href="https://wa.me/56935264052"
+              href="https://wa.me/56951875221"
               className="inline-flex items-center justify-center bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-3 px-6 rounded-xl transition-all w-full text-sm shadow-lg shadow-[#25D366]/20"
             >
               📲 Solicitar Enlace por WhatsApp
