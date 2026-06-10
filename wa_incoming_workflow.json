@@ -1,0 +1,246 @@
+{
+  "id": "waIncomingBot1234",
+  "name": "LukeDelivery - Entrada WhatsApp",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pedido-wa-incoming",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [0, 240],
+      "id": "webhook-incoming",
+      "name": "WhatsApp Webhook Receiver"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.lukeapp.me/rest/v1/clientes",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiaWF0IjoxNzM5NzI5MjcyLCJleHAiOjIwNTUwODkyNzJ9.OEpjObm93DhWMupkDmBQt-9YqrbD18Go_tsPnLCxtUc"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiaWF0IjoxNzM5NzI5MjcyLCJleHAiOjIwNTUwODkyNzJ9.OEpjObm93DhWMupkDmBQt-9YqrbD18Go_tsPnLCxtUc"
+            }
+          ]
+        },
+        "sendQueryInput": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id,nombre_contacto,nombre_tienda,whatsapp"
+            },
+            {
+              "name": "or",
+              "value": "=(whatsapp.eq.{{ $json.phone }},whatsapp.eq.+{{ $json.phone }})"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [220, 240],
+      "id": "supabase-buscar-cliente",
+      "name": "Buscar Cliente Supabase"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.all();\nif (input && input.length > 0 && input[0].json && input[0].json.length > 0) {\n  return { existe: true, cliente: input[0].json[0] };\n} else {\n  return { existe: false };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 240],
+      "id": "validar-cliente",
+      "name": "Validar Cliente"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "type": "string"
+          },
+          "conditions": [
+            {
+              "id": "cond-existe",
+              "leftValue": "={{ $json.existe }}",
+              "rightValue": "true",
+              "operator": "equals",
+              "type": "string"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 240],
+      "id": "if-existe-cliente",
+      "name": "Cliente Existe?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.lukeapp.me/rest/v1/sesiones_formulario",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiaWF0IjoxNzM5NzI5MjcyLCJleHAiOjIwNTUwODkyNzJ9.OEpjObm93DhWMupkDmBQt-9YqrbD18Go_tsPnLCxtUc"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiaWF0IjoxNzM5NzI5MjcyLCJleHAiOjIwNTUwODkyNzJ9.OEpjObm93DhWMupkDmBQt-9YqrbD18Go_tsPnLCxtUc"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"cliente_id\": \"{{ $json.cliente.id }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [880, 140],
+      "id": "crear-sesion-formulario",
+      "name": "Crear Sesión Formulario"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3015/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"to\": \"{{ $node[\\\"WhatsApp Webhook Receiver\\\"].json.phone }}\",\n  \"text\": \"¡Hola {{ $node[\\\"Validar Cliente\\\"].json.cliente.nombre_contacto }}! Abre este enlace para armar tu pedido de catálogo de ofertas de forma segura. El enlace expira en 2 horas: https://lukeapp.me/pedido?token={{ $json[0].token }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1100, 140],
+      "id": "enviar-link-catalogo",
+      "name": "Enviar Link Catálogo"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3015/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"to\": \"{{ $node[\\\"WhatsApp Webhook Receiver\\\"].json.phone }}\",\n  \"text\": \"¡Hola! Aún no estás registrado en LukeDelivery. Para registrarte y ver nuestro catálogo de ofertas, ingresa aquí: https://lukeapp.me/registro?phone={{ $node[\\\"WhatsApp Webhook Receiver\\\"].json.phone }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [880, 340],
+      "id": "enviar-invitacion-registro",
+      "name": "Enviar Invitación Registro"
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook Receiver": {
+      "main": [
+        [
+          {
+            "node": "Buscar Cliente Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Cliente Supabase": {
+      "main": [
+        [
+          {
+            "node": "Validar Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Cliente": {
+      "main": [
+        [
+          {
+            "node": "Cliente Existe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cliente Existe?": {
+      "main": [
+        [
+          {
+            "node": "Crear Sesión Formulario",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar Invitación Registro",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Crear Sesión Formulario": {
+      "main": [
+        [
+          {
+            "node": "Enviar Link Catálogo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

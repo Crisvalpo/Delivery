@@ -16,7 +16,7 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3015;
-const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'https://n8n.lukeapp.me/webhook/pedido-wa-incoming';
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'http://localhost:3010/api/whatsapp-incoming';
 
 let sock = null;
 let connectionState = 'disconnected';
