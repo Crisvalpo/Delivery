@@ -69,6 +69,11 @@ export default function AdminLukePage() {
     prioridad_territorial: "Media",
   });
 
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ nombre: "", whatsapp: "" });
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState(null);
+
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const markersLayer = useRef(null);
@@ -135,6 +140,55 @@ export default function AdminLukePage() {
   useEffect(() => {
     fetchClientes();
   }, [fetchClientes]);
+
+  const handleSendInvitation = async (e) => {
+    e.preventDefault();
+    if (!inviteForm.whatsapp.trim()) return;
+
+    setSendingInvite(true);
+    setInviteStatus(null);
+
+    try {
+      const response = await fetch("/api/enviar-invitacion", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          whatsapp: inviteForm.whatsapp,
+          nombre: inviteForm.nombre,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setInviteStatus({
+          success: true,
+          message: "¡Invitación enviada con éxito por WhatsApp!",
+        });
+        setInviteForm({ nombre: "", whatsapp: "" });
+        
+        setTimeout(() => {
+          setShowInviteModal(false);
+          setInviteStatus(null);
+        }, 2000);
+      } else {
+        setInviteStatus({
+          success: false,
+          message: data.message || "Error al enviar la invitación.",
+        });
+      }
+    } catch (err) {
+      console.error("[Invitacion] Error:", err);
+      setInviteStatus({
+        success: false,
+        message: "Error de red al intentar enviar la invitación.",
+      });
+    } finally {
+      setSendingInvite(false);
+    }
+  };
 
   // --- Inicializar Leaflet (client-only) ---
   useEffect(() => {
@@ -626,6 +680,20 @@ export default function AdminLukePage() {
           >
             <Package className="h-3.5 w-3.5 text-brand" />
             <span>Productos</span>
+          </button>
+
+          {/* Botón Enviar Invitación */}
+          <button
+            onClick={() => {
+              setInviteForm({ nombre: "", whatsapp: "" });
+              setInviteStatus(null);
+              setShowInviteModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
+            title="Enviar invitación de registro a prospecto"
+          >
+            <MessageCircle className="h-3.5 w-3.5 text-green-500" />
+            <span>Invitar</span>
           </button>
 
           <button
@@ -1134,6 +1202,114 @@ export default function AdminLukePage() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL ENVIAR INVITACION ===== */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-fade-in">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => !sendingInvite && setShowInviteModal(false)}
+          />
+
+          {/* Modal Container */}
+          <div className="relative bg-bg-surface border border-border rounded-2xl w-full max-w-md flex flex-col overflow-hidden shadow-2xl z-[9999]">
+            {/* Header */}
+            <div className="p-5 border-b border-border flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                  <MessageCircle className="h-5 w-5 text-green-500" />
+                  Enviar Invitación Terreno
+                </h2>
+                <p className="text-xs text-text-dim mt-0.5">
+                  Envía el link de registro a un prospecto por WhatsApp
+                </p>
+              </div>
+              <button
+                onClick={() => setShowInviteModal(false)}
+                disabled={sendingInvite}
+                className="p-1.5 rounded-lg bg-bg-surface-2 border border-border text-text-dim hover:text-text-primary transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSendInvitation} className="p-5 space-y-4">
+              {inviteStatus && (
+                <div
+                  className={`p-3.5 rounded-xl text-sm font-semibold border ${
+                    inviteStatus.success
+                      ? "bg-green-500/10 border-green-500/30 text-green-400"
+                      : "bg-red-500/10 border-red-500/30 text-red-400"
+                  }`}
+                >
+                  {inviteStatus.message}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-2">
+                  Nombre del Almacenero / Contacto
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Héctor Gómez"
+                  value={inviteForm.nombre}
+                  onChange={(e) =>
+                    setInviteForm({ ...inviteForm, nombre: e.target.value })
+                  }
+                  disabled={sendingInvite}
+                  className="w-full bg-bg-surface-2 border-2 border-border focus:border-brand rounded-xl py-3 px-4 text-sm font-medium text-text-primary placeholder:text-text-dim outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-2">
+                  Número de WhatsApp *
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-text-dim" />
+                  <input
+                    type="tel"
+                    required
+                    placeholder="Ej: +56912345678"
+                    value={inviteForm.whatsapp}
+                    onChange={(e) =>
+                      setInviteForm({ ...inviteForm, whatsapp: e.target.value })
+                    }
+                    disabled={sendingInvite}
+                    className="w-full bg-bg-surface-2 border-2 border-border focus:border-brand rounded-xl py-3 pl-11 pr-4 text-sm font-medium text-text-primary placeholder:text-text-dim outline-none"
+                  />
+                </div>
+                <span className="text-[10px] text-text-dim mt-1.5 block">
+                  Puedes ingresarlo con o sin código de país (+569). Se formateará automáticamente.
+                </span>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={sendingInvite}
+                  className="w-full bg-brand hover:bg-brand-hover active:scale-[0.98] text-white font-bold py-3.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {sendingInvite ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Enviando invitación...</span>
+                    </>
+                  ) : (
+                    <>
+                      <MessageCircle className="h-4 w-4" />
+                      <span>Enviar Enlace por WhatsApp</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
