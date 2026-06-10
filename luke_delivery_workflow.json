@@ -1,0 +1,110 @@
+{
+  "id": "lukeDelivB2B1234",
+  "name": "LukeDelivery B2B - Procesamiento de Pedidos",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nuevo-pedido",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [0, 240],
+      "id": "webhook-nuevo-pedido",
+      "name": "Webhook Recibir Pedido"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.item.json;\n\nconst cliente = input.cliente || {};\nconst items_pedido = input.items || [];\n\nlet itemsHtml = '';\n\nitems_pedido.forEach(item => {\n  itemsHtml += `\n    <tr>\n      <td style=\"padding: 8px; border-bottom: 1px solid #ddd;\">${item.nombre}</td>\n      <td style=\"padding: 8px; border-bottom: 1px solid #ddd;\">${item.formato_venta}</td>\n      <td style=\"padding: 8px; border-bottom: 1px solid #ddd; text-align: center;\">${item.cantidad}</td>\n      <td style=\"padding: 8px; border-bottom: 1px solid #ddd; text-align: right;\">$${item.precioUnitario.toLocaleString('es-CL')}</td>\n      <td style=\"padding: 8px; border-bottom: 1px solid #ddd; text-align: right;\">$${item.totalItem.toLocaleString('es-CL')}</td>\n    </tr>\n  `;\n});\n\nconst totalNeto = input.totalNeto || 0;\nconst totalCosto = input.totalCosto || 0;\nconst flete = input.flete || 0;\nconst totalPagar = input.totalPagar || 0;\n\nconst cleanWhatsapp = (cliente.whatsapp || '').replace(/[^0-9]/g, '');\n\nconst emailBody = `\n<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 8px; background-color: #fcfcfc;\">\n  <div style=\"background-color: #1a1a1a; color: #ffffff; padding: 15px; text-align: center; border-radius: 6px 6px 0 0;\">\n    <h2 style=\"margin: 0; font-size: 20px;\">\uD83D\uDCE6 Nuevo Pedido en LukeDelivery B2B</h2>\n    <p style=\"margin: 5px 0 0 0; font-size: 13px; opacity: 0.8;\">ID Pedido: ${input.pedido_id || 'N/A'}</p>\n  </div>\n  \n  <div style=\"padding: 15px 0;\">\n    <h3 style=\"border-bottom: 2px solid #1a1a1a; padding-bottom: 5px; color: #1a1a1a; margin-top: 0;\">\uD83C\uDFEC Datos del Almacén</h3>\n    <table style=\"width: 100%; border-collapse: collapse; font-size: 14px;\">\n      <tr>\n        <td style=\"padding: 4px 0; font-weight: bold; width: 120px;\">Tienda:</td>\n        <td style=\"padding: 4px 0;\">${cliente.nombre_tienda || 'Cliente Desconocido'}</td>\n      </tr>\n      <tr>\n        <td style=\"padding: 4px 0; font-weight: bold;\">Contacto:</td>\n        <td style=\"padding: 4px 0;\">${cliente.nombre_contacto || 'N/A'}</td>\n      </tr>\n      <tr>\n        <td style=\"padding: 4px 0; font-weight: bold;\">WhatsApp:</td>\n        <td style=\"padding: 4px 0;\"><a href=\"https://wa.me/${cleanWhatsapp}\" style=\"color: #25d366; text-decoration: none; font-weight: bold;\">${cliente.whatsapp || 'N/A'}</a></td>\n      </tr>\n      <tr>\n        <td style=\"padding: 4px 0; font-weight: bold;\">Sector:</td>\n        <td style=\"padding: 4px 0;\">${cliente.sector || 'N/A'}</td>\n      </tr>\n    </table>\n  </div>\n\n  <div style=\"padding: 15px 0;\">\n    <h3 style=\"border-bottom: 2px solid #1a1a1a; padding-bottom: 5px; color: #1a1a1a; margin-top: 0;\">\uD83D\uDED2 Detalle de Mercadería</h3>\n    <table style=\"width: 100%; border-collapse: collapse; font-size: 13px;\">\n      <thead>\n        <tr style=\"background-color: #f2f2f2;\">\n          <th style=\"padding: 8px; text-align: left; border-bottom: 2px solid #ddd;\">Producto</th>\n          <th style=\"padding: 8px; text-align: left; border-bottom: 2px solid #ddd;\">Formato</th>\n          <th style=\"padding: 8px; text-align: center; border-bottom: 2px solid #ddd; width: 50px;\">Cant</th>\n          <th style=\"padding: 8px; text-align: right; border-bottom: 2px solid #ddd; width: 80px;\">Unitario</th>\n          <th style=\"padding: 8px; text-align: right; border-bottom: 2px solid #ddd; width: 90px;\">Subtotal</th>\n        </tr>\n      </thead>\n      <tbody>\n        ${itemsHtml}\n      </tbody>\n    </table>\n  </div>\n\n  <div style=\"padding: 15px 0; background-color: #f9f9f9; border-radius: 6px; border: 1px solid #eee;\">\n    <h3 style=\"padding: 0 15px; color: #1a1a1a; margin: 0 0 10px 0;\">\uD83D\uDCB5 Resumen Financiero y Furgón</h3>\n    <table style=\"width: 100%; padding: 0 15px; font-size: 14px;\">\n      <tr>\n        <td style=\"padding: 3px 0;\">Total Mercadería (Neto):</td>\n        <td style=\"padding: 3px 0; text-align: right; font-weight: bold;\">$${totalNeto.toLocaleString('es-CL')}</td>\n      </tr>\n      <tr>\n        <td style=\"padding: 3px 0;\">Costo Mercadería:</td>\n        <td style=\"padding: 3px 0; text-align: right; color: #666;\">$${totalCosto.toLocaleString('es-CL')}</td>\n      </tr>\n      <tr>\n        <td style=\"padding: 3px 0;\">Flete Escalonado:</td>\n        <td style=\"padding: 3px 0; text-align: right; font-weight: bold;\">$${flete.toLocaleString('es-CL')}</td>\n      </tr>\n      <tr style=\"font-size: 16px; border-top: 1px solid #ddd;\">\n        <td style=\"padding: 8px 0 0 0; font-weight: bold; color: #1a1a1a;\">Total a Cobrar:</td>\n        <td style=\"padding: 8px 0 0 0; text-align: right; font-weight: bold; color: #e53e3e;\">$${totalPagar.toLocaleString('es-CL')}</td>\n      </tr>\n      <tr style=\"font-size: 12px; color: #666;\">\n        <td style=\"padding: 8px 0 0 0;\">Margen Estimado (Flete + Spread):</td>\n        <td style=\"padding: 8px 0 0 0; text-align: right;\">$${(flete + (totalNeto - totalCosto)).toLocaleString('es-CL')}</td>\n      </tr>\n    </table>\n  </div>\n  \n  <div style=\"margin-top: 20px; text-align: center; font-size: 12px; color: #999;\">\n    <p>LukeDelivery B2B — Placilla & Curauma</p>\n  </div>\n</div>\n`;\n\nconst waMessage = `*📦 NUEVO PEDIDO - LukeDelivery B2B*\n\n*🏬 Cliente:* ${cliente.nombre_tienda || 'N/A'}\n*📞 Contacto:* ${cliente.nombre_contacto || 'N/A'}\n*📍 Sector:* ${cliente.sector || 'N/A'}\n\n*💰 Totales:*\n- Neto Mercadería: $${totalNeto.toLocaleString('es-CL')}\n- Flete: $${flete.toLocaleString('es-CL')}\n- *Total a Cobrar: $${totalPagar.toLocaleString('es-CL')}*\n\nPara revisar el detalle ingresa a tu correo o al panel de administración.`;\n\nreturn {\n  nombre_tienda: cliente.nombre_tienda || 'Cliente Piloto',\n  whatsapp: cleanWhatsapp,\n  emailBody: emailBody,\n  waMessage: waMessage\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 240],
+      "id": "code-format-pedido",
+      "name": "Formatear Pedido"
+    },
+    {
+      "parameters": {
+        "fromEmail": "alertas@lukeapp.me",
+        "toEmail": "cristianluke@gmail.com",
+        "subject": "📦 Nuevo Pedido LukeDelivery - {{ $json.nombre_tienda }}",
+        "html": "={{ $json.emailBody }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [440, 160],
+      "id": "email-send-admin",
+      "name": "Enviar Correo Alerta",
+      "credentials": {
+        "smtp": {
+          "id": "SMTP-Placeholder-Credentials-Luke"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.whatsapp-provider.com/message/sendText",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "TU_API_KEY_AQUI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.whatsapp }}\",\n  \"options\": {\n    \"delay\": 1200,\n    \"presence\": \"composing\"\n  },\n  \"textMessage\": {\n    \"text\": \"{{ $json.waMessage }}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [440, 320],
+      "id": "whatsapp-http-placeholder",
+      "name": "Enviar WhatsApp (Opcional)",
+      "disabled": true
+    }
+  ],
+  "connections": {
+    "Webhook Recibir Pedido": {
+      "main": [
+        [
+          {
+            "node": "Formatear Pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatear Pedido": {
+      "main": [
+        [
+          {
+            "node": "Enviar Correo Alerta",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Enviar WhatsApp (Opcional)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

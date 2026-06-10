@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+/* =============================================
+   LukeDelivery B2B - Design System
+   Honestidad Radical · Placilla & Curauma
+   ============================================= */
+
+@theme inline {
+  /* --- Foundation Colors --- */
+  --color-bg-app: #0a0e17;
+  --color-bg-surface: #111827;
+  --color-bg-surface-2: #1a2235;
+  --color-bg-surface-hover: #1f2a40;
+
+  /* --- Brand (LukeDelivery Green) --- */
+  --color-brand: #10b981;
+  --color-brand-hover: #34d399;
+  --color-brand-dim: #065f46;
+  --color-brand-glow: rgba(16, 185, 129, 0.25);
+
+  /* --- Accent (Amber for warnings / heavy items) --- */
+  --color-accent: #f59e0b;
+  --color-accent-dim: #78350f;
+
+  /* --- Semantic --- */
+  --color-error: #ef4444;
+  --color-error-bg: rgba(239, 68, 68, 0.1);
+
+  /* --- Text --- */
+  --color-text-primary: #f9fafb;
+  --color-text-secondary: #9ca3af;
+  --color-text-dim: #4b5563;
+
+  /* --- Borders --- */
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-active: rgba(16, 185, 129, 0.4);
+
+  /* --- Map Priority Pins --- */
+  --color-pin-alta: #22c55e;
+  --color-pin-media: #eab308;
+  --color-pin-baja: #ef4444;
+
+  /* --- Layout --- */
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* --- Fonts --- */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* ===== Base ===== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+/* ===== Leaflet Override for Dark Theme ===== */
+.leaflet-container {
+  background: var(--color-bg-app) !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: var(--color-bg-surface) !important;
+  color: var(--color-text-primary) !important;
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--color-border) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-popup-tip {
+  background: var(--color-bg-surface) !important;
+}
+
+.leaflet-popup-close-button {
+  color: var(--color-text-secondary) !important;
+}
+
+/* ===== Transitions ===== */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
