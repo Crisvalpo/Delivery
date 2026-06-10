@@ -36,11 +36,14 @@ const PRIORIDAD_COLORES = {
 
 export default function AdminLukePage() {
   const [clientes, setClientes] = useState([]);
+  const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [clickCoords, setClickCoords] = useState(null);
   const [saving, setSaving] = useState(false);
   const [modoEdicion, setModoEdicion] = useState(false);
+  const [sidebarCliente, setSidebarCliente] = useState(null);
+  const [actualizandoPedidoId, setActualizandoPedidoId] = useState(null);
   const [form, setForm] = useState({
     nombre_tienda: "",
     nombre_contacto: "",
@@ -60,18 +63,45 @@ export default function AdminLukePage() {
     modoEdicionRef.current = modoEdicion;
   }, [modoEdicion]);
 
-  // --- Cargar clientes ---
+  // --- Cargar clientes y pedidos ---
   const fetchClientes = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      const { data: clData, error: clError } = await supabase
         .from("clientes")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setClientes(data || []);
+      if (clError) throw clError;
+      setClientes(clData || []);
+
+      const { data: pedData, error: pedError } = await supabase
+        .from("pedidos")
+        .select(`
+          id,
+          cliente_id,
+          total_neto,
+          flete,
+          total_pagar,
+          total_costo,
+          estado,
+          created_at,
+          items_pedido (
+            id,
+            cantidad,
+            precio_unitario,
+            total_item,
+            productos (
+              nombre,
+              formato_venta
+            )
+          )
+        `)
+        .order("created_at", { ascending: false });
+
+      if (pedError) throw pedError;
+      setPedidos(pedData || []);
     } catch (err) {
-      console.error("[AdminLuke] Error cargando clientes:", err);
+      console.error("[AdminLuke] Error cargando datos:", err);
     } finally {
       setLoading(false);
     }
@@ -145,7 +175,7 @@ export default function AdminLukePage() {
     };
   }, []);
 
-  // --- Exponer función de generación de enlace para Leaflet ---
+  // --- Exponer funciones globales para Leaflet ---
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -199,12 +229,20 @@ export default function AdminLukePage() {
       }
     };
 
+    window.abrirSidebarPedidos = (clienteId) => {
+      const cl = clientes.find(c => c.id === clienteId);
+      if (cl) {
+        setSidebarCliente(cl);
+      }
+    };
+
     return () => {
       delete window.generarEnlaceSeguro;
+      delete window.abrirSidebarPedidos;
     };
   }, [clientes]);
 
-  // --- Renderizar pines cuando cambian los clientes o el modo de edición ---
+  // --- Renderizar pines cuando cambian los clientes, pedidos o el modo de edición ---
   useEffect(() => {
     if (!markersLayer.current || typeof window === "undefined") return;
 
@@ -215,14 +253,20 @@ export default function AdminLukePage() {
       clientes.forEach((c) => {
         const color = PRIORIDAD_COLORES[c.prioridad_territorial] || "#9ca3af";
 
-        // Icono personalizado con SVG
+        const tienePedidoActivo = pedidos.some(
+          (p) =>
+            p.cliente_id === c.id &&
+            (p.estado === "Pendiente" || p.estado === "Preparado")
+        );
+
+        // Icono personalizado con SVG (pulsante si tiene pedido activo)
         const icon = L.divIcon({
           className: "",
           html: `
-            <div style="
+            <div class="${tienePedidoActivo ? 'pin-pulsante' : ''}" style="
               width: 28px; height: 28px;
               background: ${color};
-              border: 3px solid rgba(0,0,0,0.4);
+              border: 3px solid ${tienePedidoActivo ? '#ffffff' : 'rgba(0,0,0,0.4)'};
               border-radius: 50% 50% 50% 0;
               transform: rotate(-45deg);
               box-shadow: 0 4px 12px ${color}66;
@@ -293,7 +337,7 @@ export default function AdminLukePage() {
                 Prioridad: ${c.prioridad_territorial}
               </div>
               <br/>
-              <div style="display: flex; gap: 6px; margin-top: 4px;">
+              <div style="display: flex; gap: 6px; margin-top: 4px; margin-bottom: 6px;">
                 <a href="${waLink}" target="_blank" style="
                   flex: 1;
                   display: inline-flex;
@@ -328,6 +372,23 @@ export default function AdminLukePage() {
                   🔗 Enlace
                 </button>
               </div>
+              <button onclick="window.abrirSidebarPedidos('${c.id}')" style="
+                width: 100%;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                padding: 8px 10px;
+                background: #2563eb;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 11px;
+                font-weight: 600;
+                cursor: pointer;
+              ">
+                📦 Ver Pedidos ${tienePedidoActivo ? '🔴' : ''}
+              </button>
             </div>
             `,
             { maxWidth: 280 }
@@ -335,7 +396,28 @@ export default function AdminLukePage() {
         }
       });
     });
-  }, [clientes, modoEdicion, fetchClientes]);
+  }, [clientes, pedidos, modoEdicion, fetchClientes]);
+
+  // --- Actualizar estado de pedido ---
+  const handleActualizarEstado = async (pedidoId, nuevoEstado) => {
+    setActualizandoPedidoId(pedidoId);
+    try {
+      const { error } = await supabase
+        .from("pedidos")
+        .update({ estado: nuevoEstado })
+        .eq("id", pedidoId);
+
+      if (error) throw error;
+      
+      // Volver a cargar clientes y pedidos para refrescar el mapa y el sidebar
+      await fetchClientes();
+    } catch (err) {
+      console.error("[AdminLuke] Error actualizando estado de pedido:", err);
+      alert("Error al actualizar el estado del pedido.");
+    } finally {
+      setActualizandoPedidoId(null);
+    }
+  };
 
   // --- Guardar nuevo cliente ---
   const handleGuardar = async () => {
@@ -623,6 +705,178 @@ export default function AdminLukePage() {
           </div>
         </div>
       )}
+
+      {/* ===== SIDEBAR PEDIDOS ===== */}
+      {sidebarCliente && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setSidebarCliente(null)}
+          />
+
+          {/* Sidebar Panel */}
+          <div className="relative bg-bg-surface border-l border-border w-full max-w-md h-full shadow-2xl flex flex-col z-50 animate-slide-left">
+            {/* Header */}
+            <div className="p-4 border-b border-border flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-text-primary">
+                  {sidebarCliente.nombre_tienda}
+                </h2>
+                <p className="text-xs text-text-dim">
+                  Gestión de pedidos del local
+                </p>
+              </div>
+              <button
+                onClick={() => setSidebarCliente(null)}
+                className="p-1.5 rounded-lg bg-bg-surface-2 border border-border text-text-dim hover:text-text-primary transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* List of Orders */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {pedidos.filter((p) => p.cliente_id === sidebarCliente.id).length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-text-dim">
+                  <FileText className="h-12 w-12 text-border mb-3 stroke-[1.5]" />
+                  <p className="text-sm font-semibold">Sin pedidos registrados</p>
+                  <p className="text-[11px] mt-1">Este almacén aún no ha realizado ningún pedido B2B.</p>
+                </div>
+              ) : (
+                pedidos
+                  .filter((p) => p.cliente_id === sidebarCliente.id)
+                  .map((p) => {
+                    const esActivo = p.estado === "Pendiente" || p.estado === "Preparado";
+                    return (
+                      <div
+                        key={p.id}
+                        className={`bg-bg-surface-2 border rounded-2xl p-4 transition-all ${
+                          esActivo ? "border-brand/35" : "border-border"
+                        }`}
+                      >
+                        {/* Order Header */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <span className="text-xs font-mono font-bold text-text-primary">
+                              #{p.id.substring(0, 8).toUpperCase()}
+                            </span>
+                            <span className="block text-[10px] text-text-dim mt-0.5">
+                              {new Date(p.created_at).toLocaleString("es-CL", {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              })}
+                            </span>
+                          </div>
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                              p.estado === "Pendiente"
+                                ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                                : p.estado === "Preparado"
+                                ? "bg-indigo-500/10 text-indigo-500 border border-indigo-500/20"
+                                : p.estado === "En Ruta"
+                                ? "bg-blue-500/10 text-blue-500 border border-blue-500/20"
+                                : p.estado === "Entregado"
+                                ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                                : "bg-rose-500/10 text-rose-500 border border-rose-500/20"
+                            }`}
+                          >
+                            {p.estado}
+                          </span>
+                        </div>
+
+                        {/* Order Items */}
+                        <div className="border-t border-b border-border/50 py-2.5 my-2.5 space-y-1.5">
+                          {p.items_pedido?.map((item) => (
+                            <div key={item.id} className="flex justify-between text-xs">
+                              <span className="text-text-secondary">
+                                {item.cantidad}x {item.productos?.nombre || "Producto"}
+                                <span className="text-[10px] text-text-dim block">
+                                  {item.productos?.formato_venta}
+                                </span>
+                              </span>
+                              <span className="font-semibold text-text-primary">
+                                ${item.total_item.toLocaleString("es-CL")}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Totales */}
+                        <div className="space-y-1 text-xs">
+                          <div className="flex justify-between text-text-dim">
+                            <span>Flete:</span>
+                            <span>${p.flete.toLocaleString("es-CL")}</span>
+                          </div>
+                          <div className="flex justify-between font-bold text-text-primary text-sm pt-1">
+                            <span>Total a Pagar:</span>
+                            <span>${p.total_pagar.toLocaleString("es-CL")}</span>
+                          </div>
+                        </div>
+
+                        {/* Order Management Actions */}
+                        <div className="mt-4 pt-3.5 border-t border-border/50">
+                          <label className="block text-[9px] font-bold text-text-dim uppercase tracking-wider mb-2">
+                            Actualizar Estado
+                          </label>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {["Pendiente", "Preparado", "En Ruta", "Entregado", "Cancelado"].map((st) => {
+                              const isSelected = p.estado === st;
+                              const isUpdating = actualizandoPedidoId === p.id;
+                              return (
+                                <button
+                                  key={st}
+                                  onClick={() => handleActualizarEstado(p.id, st)}
+                                  disabled={isUpdating || isSelected}
+                                  className={`py-1.5 px-2.5 rounded-lg text-[10px] font-bold border transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                                    isSelected
+                                      ? st === "Pendiente"
+                                        ? "bg-amber-500 text-white border-transparent"
+                                        : st === "Preparado"
+                                        ? "bg-indigo-500 text-white border-transparent"
+                                        : st === "En Ruta"
+                                        ? "bg-blue-500 text-white border-transparent"
+                                        : st === "Entregado"
+                                        ? "bg-emerald-500 text-white border-transparent"
+                                        : "bg-rose-500 text-white border-transparent"
+                                      : "bg-bg-surface border-border text-text-secondary hover:text-text-primary hover:border-white/10"
+                                  }`}
+                                >
+                                  {isUpdating && actualizandoPedidoId === p.id && (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  )}
+                                  {st}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== CUSTOM PIN PULSING STYLE ===== */}
+      <style>{`
+        @keyframes pulso-halo {
+          0% {
+            box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.8);
+          }
+          70% {
+            box-shadow: 0 0 0 12px rgba(249, 115, 22, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+          }
+        }
+        .pin-pulsante {
+          animation: pulso-halo 1.6s infinite ease-in-out !important;
+        }
+      `}</style>
     </div>
   );
 }
