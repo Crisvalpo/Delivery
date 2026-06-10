@@ -55,6 +55,11 @@ export default function AdminLukePage() {
   const markersLayer = useRef(null);
   const supabase = createClient();
 
+  const modoEdicionRef = useRef(modoEdicion);
+  useEffect(() => {
+    modoEdicionRef.current = modoEdicion;
+  }, [modoEdicion]);
+
   // --- Cargar clientes ---
   const fetchClientes = useCallback(async () => {
     try {
@@ -116,6 +121,7 @@ export default function AdminLukePage() {
 
       // Evento de clic en el mapa para registrar nuevos clientes
       map.on("click", (e) => {
+        if (modoEdicionRef.current) return;
         setClickCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
         setForm({
           nombre_tienda: "",
@@ -395,18 +401,24 @@ export default function AdminLukePage() {
 
         <div className="flex items-center gap-2">
           {/* Switch de Modo Edición de Ubicación */}
-          <button
-            onClick={() => setModoEdicion(!modoEdicion)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
-              modoEdicion
-                ? "bg-amber-500/10 border-amber-500 text-amber-500 shadow-lg shadow-amber-500/5 animate-pulse"
-                : "bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
-            }`}
-            title="Ajustar ubicación de locales arrastrando los pines"
-          >
-            <MapPin className={`h-3.5 w-3.5 ${modoEdicion ? "text-amber-500" : "text-text-secondary"}`} />
-            {modoEdicion ? "Modo Ajuste Activo" : "Ajustar Ubicaciones"}
-          </button>
+          <div className="flex items-center gap-2.5 bg-bg-surface-2 border border-border px-3 py-1.5 rounded-xl">
+            <span className="text-[11px] font-bold text-text-secondary select-none">
+              Ajustar Ubicación
+            </span>
+            <button
+              onClick={() => setModoEdicion(!modoEdicion)}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
+                modoEdicion ? "bg-amber-500 shadow-md shadow-amber-500/20" : "bg-bg-app"
+              }`}
+              title="Permitir arrastrar y soltar pines para ajustar ubicación de los locales"
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                  modoEdicion ? "translate-x-4" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
 
           <button
             onClick={() => { setLoading(true); fetchClientes(); }}
