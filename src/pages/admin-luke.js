@@ -40,6 +40,7 @@ export default function AdminLukePage() {
   const [showModal, setShowModal] = useState(false);
   const [clickCoords, setClickCoords] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [modoEdicion, setModoEdicion] = useState(false);
   const [form, setForm] = useState({
     nombre_tienda: "",
     nombre_contacto: "",
@@ -138,7 +139,66 @@ export default function AdminLukePage() {
     };
   }, []);
 
-  // --- Renderizar pines cuando cambian los clientes ---
+  // --- Exponer función de generación de enlace para Leaflet ---
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    window.generarEnlaceSeguro = async (clienteId, nombreContacto) => {
+      const btn = document.getElementById(`btn-enlace-${clienteId}`);
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = "⏳...";
+      }
+
+      try {
+        const res = await fetch(`/api/crear-token-prueba?cliente_id=${clienteId}`);
+        const data = await res.json();
+        
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || "Error al crear el token");
+        }
+
+        const secureUrl = data.url_pedido_prueba;
+        
+        // Copiar al portapapeles
+        await navigator.clipboard.writeText(secureUrl);
+        
+        if (btn) {
+          btn.style.background = "#059669";
+          btn.innerText = "✅ Copiado";
+        }
+        
+        const confirmShare = window.confirm(
+          `¡Enlace seguro generado y copiado al portapapeles!\n\n¿Quieres abrir WhatsApp para enviárselo a ${nombreContacto}?`
+        );
+        
+        if (confirmShare) {
+          const cliente = clientes.find(cl => cl.id === clienteId);
+          if (cliente) {
+            const cleanPhone = cliente.whatsapp.replace(/[^0-9]/g, "");
+            const templateMsg = encodeURIComponent(
+              `¡Hola ${nombreContacto}! Aquí tienes tu enlace seguro de LukeDelivery para hacer tu pedido de hoy: ${secureUrl}\n\n*(El enlace expira en 2 horas)*`
+            );
+            window.open(`https://wa.me/${cleanPhone}?text=${templateMsg}`, "_blank");
+          }
+        }
+      } catch (err) {
+        console.error("[generarEnlaceSeguro] Error:", err);
+        alert("Error al generar el enlace de pedido: " + err.message);
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = "🔗 Enlace";
+          btn.style.background = "#10b981";
+        }
+      }
+    };
+
+    return () => {
+      delete window.generarEnlaceSeguro;
+    };
+  }, [clientes]);
+
+  // --- Renderizar pines cuando cambian los clientes o el modo de edición ---
   useEffect(() => {
     if (!markersLayer.current || typeof window === "undefined") return;
 
@@ -169,58 +229,107 @@ export default function AdminLukePage() {
 
         const waLink = `https://wa.me/${c.whatsapp.replace(/[^0-9+]/g, "")}`;
 
-        const marker = L.marker([c.latitud, c.longitud], { icon }).addTo(
-          markersLayer.current
-        );
+        const marker = L.marker([c.latitud, c.longitud], { 
+          icon,
+          draggable: modoEdicion 
+        }).addTo(markersLayer.current);
 
-        marker.bindPopup(
-          `
-          <div style="min-width: 220px; font-family: system-ui, sans-serif;">
-            <div style="font-size: 15px; font-weight: 700; margin-bottom: 6px; color: #f9fafb;">
-              ${c.nombre_tienda}
+        if (modoEdicion) {
+          marker.bindTooltip(`Arrastra para mover: ${c.nombre_tienda}`, { permanent: false, direction: 'top' });
+          
+          marker.on("dragend", async (e) => {
+            const newLatLng = e.target.getLatLng();
+            const confirmacion = window.confirm(
+              `¿Reubicar "${c.nombre_tienda}" a:\nLat: ${newLatLng.lat.toFixed(6)}\nLng: ${newLatLng.lng.toFixed(6)}?`
+            );
+
+            if (confirmacion) {
+              const { error } = await supabase
+                .from("clientes")
+                .update({ latitud: newLatLng.lat, longitud: newLatLng.lng })
+                .eq("id", c.id);
+
+              if (error) {
+                console.error("Error al reubicar:", error);
+                alert("Error al actualizar la ubicación en la base de datos.");
+              }
+              // Volver a cargar clientes
+              fetchClientes();
+            } else {
+              // Revertir posición
+              fetchClientes();
+            }
+          });
+        } else {
+          marker.bindPopup(
+            `
+            <div style="min-width: 220px; font-family: system-ui, sans-serif;">
+              <div style="font-size: 15px; font-weight: 700; margin-bottom: 6px; color: #f9fafb;">
+                ${c.nombre_tienda}
+              </div>
+              <div style="font-size: 12px; color: #9ca3af; margin-bottom: 3px;">
+                👤 ${c.nombre_contacto}
+              </div>
+              <div style="font-size: 12px; color: #9ca3af; margin-bottom: 3px;">
+                📍 ${c.sector}
+              </div>
+              ${c.notas_campo ? `<div style="font-size: 11px; color: #6b7280; margin-bottom: 8px; font-style: italic;">📝 ${c.notas_campo}</div>` : ""}
+              <div style="
+                display: inline-block;
+                padding: 2px 8px;
+                border-radius: 8px;
+                font-size: 10px;
+                font-weight: 600;
+                color: white;
+                background: ${color};
+                margin-bottom: 10px;
+              ">
+                Prioridad: ${c.prioridad_territorial}
+              </div>
+              <br/>
+              <div style="display: flex; gap: 6px; margin-top: 4px;">
+                <a href="${waLink}" target="_blank" style="
+                  flex: 1;
+                  display: inline-flex;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 6px;
+                  padding: 8px 10px;
+                  background: #25D366;
+                  color: white;
+                  border-radius: 10px;
+                  font-size: 11px;
+                  font-weight: 600;
+                  text-decoration: none;
+                ">
+                  💬 Chat
+                </a>
+                <button onclick="window.generarEnlaceSeguro('${c.id}', '${c.nombre_contacto.replace(/'/g, "\\'")}')" style="
+                  flex: 1;
+                  display: inline-flex;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 6px;
+                  padding: 8px 10px;
+                  background: #10b981;
+                  color: white;
+                  border: none;
+                  border-radius: 10px;
+                  font-size: 11px;
+                  font-weight: 600;
+                  cursor: pointer;
+                " id="btn-enlace-${c.id}">
+                  🔗 Enlace
+                </button>
+              </div>
             </div>
-            <div style="font-size: 12px; color: #9ca3af; margin-bottom: 3px;">
-              👤 ${c.nombre_contacto}
-            </div>
-            <div style="font-size: 12px; color: #9ca3af; margin-bottom: 3px;">
-              📍 ${c.sector}
-            </div>
-            ${c.notas_campo ? `<div style="font-size: 11px; color: #6b7280; margin-bottom: 8px; font-style: italic;">📝 ${c.notas_campo}</div>` : ""}
-            <div style="
-              display: inline-block;
-              padding: 2px 8px;
-              border-radius: 8px;
-              font-size: 10px;
-              font-weight: 600;
-              color: white;
-              background: ${color};
-              margin-bottom: 10px;
-            ">
-              Prioridad: ${c.prioridad_territorial}
-            </div>
-            <br/>
-            <a href="${waLink}" target="_blank" style="
-              display: inline-flex;
-              align-items: center;
-              gap: 6px;
-              padding: 8px 14px;
-              background: #25D366;
-              color: white;
-              border-radius: 10px;
-              font-size: 12px;
-              font-weight: 600;
-              text-decoration: none;
-              margin-top: 4px;
-            ">
-              💬 Abrir WhatsApp
-            </a>
-          </div>
-          `,
-          { maxWidth: 280 }
-        );
+            `,
+            { maxWidth: 280 }
+          );
+        }
       });
     });
-  }, [clientes]);
+  }, [clientes, modoEdicion, fetchClientes]);
 
   // --- Guardar nuevo cliente ---
   const handleGuardar = async () => {
@@ -285,6 +394,20 @@ export default function AdminLukePage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Switch de Modo Edición de Ubicación */}
+          <button
+            onClick={() => setModoEdicion(!modoEdicion)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+              modoEdicion
+                ? "bg-amber-500/10 border-amber-500 text-amber-500 shadow-lg shadow-amber-500/5 animate-pulse"
+                : "bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
+            }`}
+            title="Ajustar ubicación de locales arrastrando los pines"
+          >
+            <MapPin className={`h-3.5 w-3.5 ${modoEdicion ? "text-amber-500" : "text-text-secondary"}`} />
+            {modoEdicion ? "Modo Ajuste Activo" : "Ajustar Ubicaciones"}
+          </button>
+
           <button
             onClick={() => { setLoading(true); fetchClientes(); }}
             className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-surface-2 transition-colors cursor-pointer"
