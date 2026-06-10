@@ -261,35 +261,6 @@ export default function PedidoPage() {
                 $3.000 base + $500 por bulto pesado. ¡Calculado automáticamente!
               </p>
             </div>
-
-            {/* Meta del Furgón Card */}
-            <div className="bg-bg-surface border-2 border-border rounded-2xl p-5">
-              <div className="flex justify-between items-end mb-2">
-                <span className="text-xs font-bold text-text-secondary uppercase tracking-widest">Capacidad del Furgón</span>
-                <span className={`text-xs font-black ${cumpleMinimo ? "text-brand" : "text-accent"}`}>
-                  {Math.round(Math.min(100, (total / MONTO_MINIMO) * 100))}% completo
-                </span>
-              </div>
-              {/* Thick progress bar */}
-              <div className="w-full h-8 bg-bg-surface-2 rounded-full border border-border overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-300 ${
-                    cumpleMinimo ? "bg-brand" : "bg-accent"
-                  }`}
-                  style={{
-                    width: `${Math.min(100, (total / MONTO_MINIMO) * 100)}%`,
-                  }}
-                />
-              </div>
-              <div className="mt-3 flex items-center gap-2 text-xs font-bold text-text-primary">
-                <span>🚚</span>
-                <span>
-                  {cumpleMinimo
-                    ? "¡Meta alcanzada! Furgón listo para despacho."
-                    : `Faltan $${(MONTO_MINIMO - total).toLocaleString("es-CL")} para activar el despacho.`}
-                </span>
-              </div>
-            </div>
           </div>
         )}
 
@@ -387,9 +358,9 @@ export default function PedidoPage() {
                         {p.formato_venta}
                       </span>
                     </div>
-                    <p className="text-base font-black text-text-primary mt-1.5">
+                    <p className="text-lg font-black text-gray-900 mt-2">
                       {fmt(p.precio)}
-                      <span className="text-[10px] text-text-dim font-normal ml-1.5">
+                      <span className="text-xs text-gray-500 font-medium ml-1.5">
                         costo real
                       </span>
                     </p>
@@ -437,7 +408,7 @@ export default function PedidoPage() {
             <div className="mb-4">
               <div className="flex justify-between items-end text-sm mb-1.5">
                 <span className="text-text-secondary font-bold uppercase tracking-wide">
-                  Meta furgón: $35.000
+                  Pedido mínimo: $35.000
                 </span>
                 <span
                   className={`font-black text-base ${cumpleMinimo ? "text-brand" : "text-accent"}`}
@@ -481,7 +452,7 @@ export default function PedidoPage() {
                 </span>
                 {total > 0 && (
                   <p className="text-base font-semibold text-accent mt-1 uppercase tracking-wide">
-                    Faltan {fmt(faltante)} para activar el furgón
+                    Faltan {fmt(faltante)} para el pedido mínimo
                   </p>
                 )}
               </div>
