@@ -13,6 +13,8 @@ import {
   Phone,
   FileText,
   RefreshCw,
+  Package,
+  Edit,
 } from "lucide-react";
 
 // Coordenadas centrales de Placilla de Peñuelas
@@ -37,8 +39,22 @@ const PRIORIDAD_COLORES = {
 export default function AdminLukePage() {
   const [clientes, setClientes] = useState([]);
   const [pedidos, setPedidos] = useState([]);
+  const [productos, setProductos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showCatalogModal, setShowCatalogModal] = useState(false);
+  const [editingProducto, setEditingProducto] = useState(null);
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [filtroSoloActivos, setFiltroSoloActivos] = useState(true);
+  const [productForm, setProductForm] = useState({
+    nombre: "",
+    formato_venta: "",
+    precio: "",
+    precio_costo: "",
+    categoria_logistica: "Estándar",
+    url_imagen_retail: "",
+    disponible: true
+  });
   const [clickCoords, setClickCoords] = useState(null);
   const [saving, setSaving] = useState(false);
   const [modoEdicion, setModoEdicion] = useState(false);
@@ -63,7 +79,7 @@ export default function AdminLukePage() {
     modoEdicionRef.current = modoEdicion;
   }, [modoEdicion]);
 
-  // --- Cargar clientes y pedidos ---
+  // --- Cargar clientes, pedidos y productos ---
   const fetchClientes = useCallback(async () => {
     try {
       const { data: clData, error: clError } = await supabase
@@ -100,6 +116,14 @@ export default function AdminLukePage() {
 
       if (pedError) throw pedError;
       setPedidos(pedData || []);
+
+      const { data: prodData, error: prodError } = await supabase
+        .from("productos")
+        .select("*")
+        .order("nombre", { ascending: true });
+
+      if (prodError) throw prodError;
+      setProductos(prodData || []);
     } catch (err) {
       console.error("[AdminLuke] Error cargando datos:", err);
     } finally {
@@ -419,6 +443,98 @@ export default function AdminLukePage() {
     }
   };
 
+  // --- Toggle Disponibilidad de Producto ---
+  const handleToggleDisponibilidad = async (producto) => {
+    try {
+      const { error } = await supabase
+        .from("productos")
+        .update({ disponible: !producto.disponible })
+        .eq("id", producto.id);
+
+      if (error) throw error;
+      
+      // Refrescar datos
+      await fetchClientes();
+    } catch (err) {
+      console.error("[AdminLuke] Error al cambiar disponibilidad:", err);
+      alert("Error al cambiar la disponibilidad del producto.");
+    }
+  };
+
+  // --- Abrir Formulario de Producto ---
+  const handleOpenProductForm = (producto = null) => {
+    if (producto) {
+      setEditingProducto(producto);
+      setProductForm({
+        nombre: producto.nombre,
+        formato_venta: producto.formato_venta,
+        precio: producto.precio,
+        precio_costo: producto.precio_costo,
+        categoria_logistica: producto.categoria_logistica,
+        url_imagen_retail: producto.url_imagen_retail || "",
+        disponible: producto.disponible
+      });
+    } else {
+      setEditingProducto(null);
+      setProductForm({
+        nombre: "",
+        formato_venta: "",
+        precio: "",
+        precio_costo: "",
+        categoria_logistica: "Estándar",
+        url_imagen_retail: "",
+        disponible: true
+      });
+    }
+    setShowProductForm(true);
+  };
+
+  // --- Guardar/Insertar/Actualizar Producto ---
+  const handleGuardarProducto = async () => {
+    if (!productForm.nombre.trim() || !productForm.formato_venta.trim() || !productForm.precio || !productForm.precio_costo) {
+      alert("Por favor completa los campos requeridos.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        nombre: productForm.nombre.trim(),
+        formato_venta: productForm.formato_venta.trim(),
+        precio: parseInt(productForm.precio),
+        precio_costo: parseInt(productForm.precio_costo),
+        categoria_logistica: productForm.categoria_logistica,
+        url_imagen_retail: productForm.url_imagen_retail.trim() || null,
+        disponible: productForm.disponible
+      };
+
+      if (editingProducto) {
+        // Actualizar
+        const { error } = await supabase
+          .from("productos")
+          .update(payload)
+          .eq("id", editingProducto.id);
+
+        if (error) throw error;
+      } else {
+        // Insertar
+        const { error } = await supabase
+          .from("productos")
+          .insert(payload);
+
+        if (error) throw error;
+      }
+
+      setShowProductForm(false);
+      await fetchClientes(); // Refrescar lista de productos
+    } catch (err) {
+      console.error("[AdminLuke] Error guardando producto:", err);
+      alert("Error al guardar el producto. Revisa la consola.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // --- Guardar nuevo cliente ---
   const handleGuardar = async () => {
     if (
@@ -501,6 +617,16 @@ export default function AdminLukePage() {
               />
             </button>
           </div>
+
+          {/* Botón Gestionar Catálogo */}
+          <button
+            onClick={() => setShowCatalogModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
+            title="Administrar catálogo de productos"
+          >
+            <Package className="h-3.5 w-3.5 text-brand" />
+            <span>Productos</span>
+          </button>
 
           <button
             onClick={() => { setLoading(true); fetchClientes(); }}
@@ -723,9 +849,18 @@ export default function AdminLukePage() {
                 <h2 className="text-base font-bold text-text-primary">
                   {sidebarCliente.nombre_tienda}
                 </h2>
-                <p className="text-xs text-text-dim">
-                  Gestión de pedidos del local
-                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <button
+                    onClick={() => setFiltroSoloActivos(!filtroSoloActivos)}
+                    className={`text-[10px] px-2 py-0.5 rounded-full border transition-all cursor-pointer font-bold ${
+                      filtroSoloActivos
+                        ? "bg-brand/10 border-brand text-brand"
+                        : "bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary"
+                    }`}
+                  >
+                    {filtroSoloActivos ? "Mostrar: Solo Activos 🔴" : "Mostrar: Todos"}
+                  </button>
+                </div>
               </div>
               <button
                 onClick={() => setSidebarCliente(null)}
@@ -744,9 +879,26 @@ export default function AdminLukePage() {
                   <p className="text-[11px] mt-1">Este almacén aún no ha realizado ningún pedido B2B.</p>
                 </div>
               ) : (
-                pedidos
-                  .filter((p) => p.cliente_id === sidebarCliente.id)
-                  .map((p) => {
+                (() => {
+                  const filtrados = pedidos.filter((p) => {
+                    if (p.cliente_id !== sidebarCliente.id) return false;
+                    if (filtroSoloActivos) {
+                      return p.estado === "Pendiente" || p.estado === "Preparado" || p.estado === "En Ruta";
+                    }
+                    return true;
+                  });
+
+                  if (filtrados.length === 0) {
+                    return (
+                      <div className="h-full flex flex-col items-center justify-center text-center p-6 text-text-dim">
+                        <FileText className="h-10 w-10 text-border mb-2 stroke-[1.5]" />
+                        <p className="text-xs font-semibold">Sin pedidos activos</p>
+                        <p className="text-[10px] mt-0.5">Todos los pedidos de este local están archivados. Desactiva el filtro superior para ver el historial.</p>
+                      </div>
+                    );
+                  }
+
+                  return filtrados.map((p) => {
                     const esActivo = p.estado === "Pendiente" || p.estado === "Preparado";
                     return (
                       <div
@@ -853,8 +1005,293 @@ export default function AdminLukePage() {
                         </div>
                       </div>
                     );
-                  })
+                  });
+                })()
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL GESTION CATALOGO ===== */}
+      {showCatalogModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowCatalogModal(false)}
+          />
+
+          {/* Modal Container */}
+          <div className="relative bg-bg-surface border border-border rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-fade-in z-[9999]">
+            {/* Header */}
+            <div className="p-5 border-b border-border flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                  <Package className="h-5 w-5 text-brand" />
+                  Catálogo B2B de Productos
+                </h2>
+                <p className="text-xs text-text-dim mt-0.5">
+                  Gestiona los precios, disponibilidad y stock de tu furgón mayorista
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => handleOpenProductForm(null)}
+                  className="bg-brand hover:bg-brand-hover text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Nuevo Producto</span>
+                </button>
+                <button
+                  onClick={() => setShowCatalogModal(false)}
+                  className="p-1.5 rounded-lg bg-bg-surface-2 border border-border text-text-dim hover:text-text-primary transition-colors cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Product List */}
+            <div className="flex-1 overflow-y-auto p-5">
+              {productos.length === 0 ? (
+                <div className="h-48 flex flex-col items-center justify-center text-center text-text-dim">
+                  <Package className="h-10 w-10 text-border mb-2 stroke-[1.5]" />
+                  <p className="text-sm font-semibold">No hay productos en el catálogo</p>
+                  <p className="text-xs mt-0.5">Haz clic en "Nuevo Producto" para agregar uno.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-text-secondary border-collapse">
+                    <thead>
+                      <tr className="border-b border-border text-text-dim uppercase tracking-wider text-[9px] font-bold">
+                        <th className="pb-3 pl-2">Imagen</th>
+                        <th className="pb-3">Nombre</th>
+                        <th className="pb-3">Formato</th>
+                        <th className="pb-3">Precio Venta</th>
+                        <th className="pb-3">Costo</th>
+                        <th className="pb-3">Categoría</th>
+                        <th className="pb-3 text-center">Disponible</th>
+                        <th className="pb-3 text-right pr-2">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {productos.map((prod) => (
+                        <tr key={prod.id} className="hover:bg-bg-surface-2/30 transition-colors">
+                          <td className="py-3 pl-2">
+                            {prod.url_imagen_retail ? (
+                              <img
+                                src={prod.url_imagen_retail}
+                                alt={prod.nombre}
+                                className="w-8 h-8 rounded-lg object-cover bg-bg-surface-2"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-lg bg-bg-surface-2 flex items-center justify-center">
+                                <Package className="h-4 w-4 text-text-dim" />
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 font-semibold text-text-primary">{prod.nombre}</td>
+                          <td className="py-3">{prod.formato_venta}</td>
+                          <td className="py-3 font-bold text-text-primary">${prod.precio.toLocaleString("es-CL")}</td>
+                          <td className="py-3 text-text-dim">${prod.precio_costo.toLocaleString("es-CL")}</td>
+                          <td className="py-3">
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                              prod.categoria_logistica === "Pesado"
+                                ? "bg-accent/10 text-accent border border-accent/20"
+                                : "bg-brand/10 text-brand border border-brand/20"
+                            }`}>
+                              {prod.categoria_logistica}
+                            </span>
+                          </td>
+                          <td className="py-3 text-center">
+                            <button
+                              onClick={() => handleToggleDisponibilidad(prod)}
+                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                prod.disponible ? "bg-brand animate-pulse-glow" : "bg-bg-app border-border"
+                              }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                  prod.disponible ? "translate-x-4" : "translate-x-0"
+                                }`}
+                              />
+                            </button>
+                          </td>
+                          <td className="py-3 text-right pr-2">
+                            <button
+                              onClick={() => handleOpenProductForm(prod)}
+                              className="p-1.5 rounded-lg bg-bg-surface-2 border border-border text-text-secondary hover:text-brand hover:border-brand/40 transition-colors cursor-pointer inline-flex items-center justify-center"
+                              title="Editar producto"
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL FORMULARIO PRODUCTO ===== */}
+      {showProductForm && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={() => setShowProductForm(false)}
+          />
+
+          {/* Form container */}
+          <div className="relative bg-bg-surface border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl animate-scale-up z-[10000]">
+            <button
+              onClick={() => setShowProductForm(false)}
+              className="absolute top-4 right-4 text-text-dim hover:text-text-primary transition-colors cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <h3 className="text-base font-bold text-text-primary mb-5 flex items-center gap-2">
+              <Package className="h-4.5 w-4.5 text-brand" />
+              {editingProducto ? "Editar Producto" : "Nuevo Producto"}
+            </h3>
+
+            <div className="space-y-4">
+              {/* Nombre */}
+              <div>
+                <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                  Nombre del Producto *
+                </label>
+                <input
+                  type="text"
+                  value={productForm.nombre}
+                  onChange={(e) => setProductForm({ ...productForm, nombre: e.target.value })}
+                  placeholder="Ej: Harina sin Polvos 1kg"
+                  className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
+                />
+              </div>
+
+              {/* Formato */}
+              <div>
+                <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                  Formato de Venta *
+                </label>
+                <input
+                  type="text"
+                  value={productForm.formato_venta}
+                  onChange={(e) => setProductForm({ ...productForm, formato_venta: e.target.value })}
+                  placeholder="Ej: Bolsa 1u o Saco 25kg"
+                  className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
+                />
+              </div>
+
+              {/* Precios */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                    Precio Venta ($) *
+                  </label>
+                  <input
+                    type="number"
+                    value={productForm.precio}
+                    onChange={(e) => setProductForm({ ...productForm, precio: e.target.value })}
+                    placeholder="1200"
+                    className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                    Precio Costo ($) *
+                  </label>
+                  <input
+                    type="number"
+                    value={productForm.precio_costo}
+                    onChange={(e) => setProductForm({ ...productForm, precio_costo: e.target.value })}
+                    placeholder="1000"
+                    className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Categoría Logística */}
+              <div>
+                <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                  Categoría Logística
+                </label>
+                <div className="flex gap-2">
+                  {["Estándar", "Pesado"].map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setProductForm({ ...productForm, categoria_logistica: cat })}
+                      type="button"
+                      className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                        productForm.categoria_logistica === cat
+                          ? "bg-brand text-white border-transparent"
+                          : "text-text-dim bg-bg-surface-2 border-border hover:border-white/10"
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Imagen URL */}
+              <div>
+                <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                  URL de Imagen (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={productForm.url_imagen_retail}
+                  onChange={(e) => setProductForm({ ...productForm, url_imagen_retail: e.target.value })}
+                  placeholder="https://..."
+                  className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
+                />
+              </div>
+
+              {/* Disponibilidad */}
+              <div className="flex items-center justify-between bg-bg-surface-2 border border-border rounded-xl p-3.5">
+                <div>
+                  <span className="block text-xs font-bold text-text-primary">Disponible para Venta</span>
+                  <span className="block text-[10px] text-text-dim">Habilita este producto en el catálogo</span>
+                </div>
+                <button
+                  onClick={() => setProductForm({ ...productForm, disponible: !productForm.disponible })}
+                  type="button"
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    productForm.disponible ? "bg-brand" : "bg-bg-app border-border"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      productForm.disponible ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Guardar */}
+              <button
+                onClick={handleGuardarProducto}
+                disabled={saving || !productForm.nombre.trim() || !productForm.formato_venta.trim() || !productForm.precio || !productForm.precio_costo}
+                className="w-full bg-brand hover:bg-brand-hover disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer mt-4 text-xs"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Guardando...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-3.5 w-3.5" /> Guardar Producto
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
@@ -887,6 +1324,20 @@ export default function AdminLukePage() {
         }
         .animate-slide-left {
           animation: slide-left 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes scale-up {
+          from {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        .animate-scale-up {
+          animation: scale-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
       `}</style>
     </div>

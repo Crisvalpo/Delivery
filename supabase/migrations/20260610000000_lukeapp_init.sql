@@ -21,6 +21,12 @@ ALTER TABLE public.productos ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Lectura pública de productos" ON public.productos
     FOR SELECT TO public USING (true);
 
+CREATE POLICY "Inserción pública de productos" ON public.productos
+    FOR INSERT TO public WITH CHECK (true);
+
+CREATE POLICY "Modificación pública de productos" ON public.productos
+    FOR UPDATE TO public USING (true);
+
 -- Tabla de clientes (almacenes mapeados)
 CREATE TABLE IF NOT EXISTS public.clientes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
