@@ -32,6 +32,7 @@ export default function RegistroPage() {
   const [nombreContacto, setNombreContacto] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [sector, setSector] = useState("Placilla Oriente");
+  const [tipoNegocio, setTipoNegocio] = useState("Almacén");
 
   // Coordenadas
   const [latitud, setLatitud] = useState(null);
@@ -49,6 +50,13 @@ export default function RegistroPage() {
     "Curauma Norte",
     "Curauma Sur",
     "Fundo El Bato",
+  ];
+
+  const tiposNegocio = [
+    "Almacén",
+    "Minimarket",
+    "Botillería",
+    "Fiambrería",
   ];
 
   // --- Captura de GPS ---
@@ -137,6 +145,7 @@ export default function RegistroPage() {
           latitud: latitud,
           longitud: longitud,
           prioridad_territorial: "Media",
+          tipo_negocio: tipoNegocio,
         })
         .select("id")
         .single();
@@ -271,7 +280,7 @@ export default function RegistroPage() {
               </div>
             </div>
 
-            {/* Sector */}
+             {/* Sector */}
             <div>
               <label className="block text-base font-bold text-text-primary mb-2">
                 Sector / Barrio *
@@ -285,6 +294,29 @@ export default function RegistroPage() {
                   {sectores.map((sec) => (
                     <option key={sec} value={sec} className="bg-bg-surface text-text-primary text-base font-medium">
                       {sec}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
+                  <ChevronDown className="h-5 w-5 text-text-secondary" />
+                </div>
+              </div>
+            </div>
+
+            {/* Tipo de Negocio */}
+            <div>
+              <label className="block text-base font-bold text-text-primary mb-2">
+                Tipo de Negocio / Giro *
+              </label>
+              <div className="relative">
+                <select
+                  value={tipoNegocio}
+                  onChange={(e) => setTipoNegocio(e.target.value)}
+                  className="w-full appearance-none bg-bg-surface-2 border-2 border-border focus:border-brand rounded-2xl py-3.5 px-4 pr-12 text-base font-bold text-text-primary transition-colors outline-none cursor-pointer"
+                >
+                  {tiposNegocio.map((t) => (
+                    <option key={t} value={t} className="bg-bg-surface text-text-primary text-base font-medium">
+                      {t}
                     </option>
                   ))}
                 </select>

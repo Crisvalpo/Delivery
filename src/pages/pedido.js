@@ -17,6 +17,13 @@ import {
 
 const MONTO_MINIMO = 35000;
 
+const CATEGORIAS_COMPATIBLES = {
+  "Almacén": ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"],
+  "Minimarket": ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"],
+  "Botillería": ["Bebidas", "Confites"],
+  "Fiambrería": ["Abarrotes", "Limpieza"]
+};
+
 export default function PedidoPage() {
   const router = useRouter();
 
@@ -31,6 +38,10 @@ export default function PedidoPage() {
   const [orderSummary, setOrderSummary] = useState(null);
 
   const supabase = createClient();
+
+  const tipo = clienteInfo?.tipo_negocio || "Almacén";
+  const catsPermitidas = CATEGORIAS_COMPATIBLES[tipo] || ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"];
+  const productosFiltrados = productos.filter((p) => catsPermitidas.includes(p.categoria || "Abarrotes"));
 
   // --- Carga de productos e inicialización de sesión ---
   useEffect(() => {
@@ -297,16 +308,16 @@ export default function PedidoPage() {
               Cargando precios de costo...
             </p>
           </div>
-        ) : !tokenError && productos.length === 0 ? (
+        ) : !tokenError && productosFiltrados.length === 0 ? (
           <div className="text-center py-24">
             <p className="text-text-secondary">
-              No hay productos disponibles en este momento.
+              No hay productos disponibles para tu tipo de negocio en este momento.
             </p>
           </div>
         ) : !tokenError && (
           /* ===== PRODUCT LIST ===== */
           <div className="space-y-3">
-            {productos.map((p) => {
+            {productosFiltrados.map((p) => {
               const cant = carrito[p.id] || 0;
               const isActive = cant > 0;
 
@@ -395,7 +406,7 @@ export default function PedidoPage() {
       </main>
 
       {/* ===== STICKY FOOTER: REGLA DEL FURGÓN ===== */}
-      {!tokenError && !loading && productos.length > 0 && (
+      {!tokenError && !loading && productosFiltrados.length > 0 && (
         <footer className="fixed bottom-0 inset-x-0 bg-bg-surface/95 backdrop-blur-xl border-t border-border py-5 px-5 z-40">
           <div className="max-w-lg mx-auto">
             {/* Progress bar */}

@@ -73,6 +73,7 @@ export default async function handler(req, res) {
         sector: cliente.sector,
         latitud: cliente.latitud,
         longitud: cliente.longitud,
+        tipo_negocio: cliente.tipo_negocio,
       },
     });
   } catch (err) {

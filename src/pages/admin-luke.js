@@ -63,7 +63,8 @@ export default function AdminLukePage() {
     precio_costo: "",
     categoria_logistica: "Estándar",
     url_imagen_retail: "",
-    disponible: true
+    disponible: true,
+    categoria: "Abarrotes"
   });
   const [clickCoords, setClickCoords] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -77,6 +78,7 @@ export default function AdminLukePage() {
     sector: SECTORES[0],
     notas_campo: "",
     prioridad_territorial: "Media",
+    tipo_negocio: "Almacén",
   });
 
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -248,6 +250,7 @@ export default function AdminLukePage() {
           sector: SECTORES[0],
           notas_campo: "",
           prioridad_territorial: "Media",
+          tipo_negocio: "Almacén",
         });
         setShowModal(true);
       });
@@ -536,7 +539,8 @@ export default function AdminLukePage() {
         precio_costo: producto.precio_costo,
         categoria_logistica: producto.categoria_logistica,
         url_imagen_retail: producto.url_imagen_retail || "",
-        disponible: producto.disponible
+        disponible: producto.disponible,
+        categoria: producto.categoria || "Abarrotes"
       });
     } else {
       setEditingProducto(null);
@@ -547,7 +551,8 @@ export default function AdminLukePage() {
         precio_costo: "",
         categoria_logistica: "Estándar",
         url_imagen_retail: "",
-        disponible: true
+        disponible: true,
+        categoria: "Abarrotes"
       });
     }
     setShowProductForm(true);
@@ -569,7 +574,8 @@ export default function AdminLukePage() {
         precio_costo: parseInt(productForm.precio_costo),
         categoria_logistica: productForm.categoria_logistica,
         url_imagen_retail: productForm.url_imagen_retail.trim() || null,
-        disponible: productForm.disponible
+        disponible: productForm.disponible,
+        categoria: productForm.categoria
       };
 
       if (editingProducto) {
@@ -621,6 +627,7 @@ export default function AdminLukePage() {
         latitud: clickCoords.lat,
         longitud: clickCoords.lng,
         prioridad_territorial: form.prioridad_territorial,
+        tipo_negocio: form.tipo_negocio,
       });
 
       if (error) throw error;
@@ -839,6 +846,26 @@ export default function AdminLukePage() {
                 </select>
               </div>
 
+              {/* Tipo de Negocio */}
+              <div>
+                <label className="block text-[11px] font-semibold text-text-dim uppercase tracking-wider mb-1.5">
+                  Tipo de Negocio
+                </label>
+                <select
+                  value={form.tipo_negocio}
+                  onChange={(e) =>
+                    setForm({ ...form, tipo_negocio: e.target.value })
+                  }
+                  className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-sm text-text-primary focus:border-brand/50 focus:outline-none transition-colors cursor-pointer"
+                >
+                  {["Almacén", "Minimarket", "Botillería", "Fiambrería"].map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Prioridad */}
               <div>
                 <label className="block text-[11px] font-semibold text-text-dim uppercase tracking-wider mb-1.5">
@@ -928,6 +955,9 @@ export default function AdminLukePage() {
                   {sidebarCliente.nombre_tienda}
                 </h2>
                 <div className="flex items-center gap-2 mt-1">
+                  <span className="text-[10px] bg-bg-surface-2 border border-border px-2 py-0.5 rounded-full text-text-secondary font-bold select-none">
+                    {sidebarCliente.tipo_negocio || "Almacén"}
+                  </span>
                   <button
                     onClick={() => setFiltroSoloActivos(!filtroSoloActivos)}
                     className={`text-[10px] px-2 py-0.5 rounded-full border transition-all cursor-pointer font-bold ${
@@ -1499,6 +1529,24 @@ export default function AdminLukePage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Categoría de Negocio */}
+              <div>
+                <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                  Categoría Comercial
+                </label>
+                <select
+                  value={productForm.categoria}
+                  onChange={(e) => setProductForm({ ...productForm, categoria: e.target.value })}
+                  className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary focus:border-brand/50 focus:outline-none transition-colors cursor-pointer"
+                >
+                  {["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"].map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Imagen URL */}
