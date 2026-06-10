@@ -1,0 +1,86 @@
+import { createAdminClient } from "@/lib/supabase/server";
+
+export default async function handler(req, res) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", ["GET"]);
+    return res
+      .status(405)
+      .json({ success: false, message: `Método ${req.method} no permitido` });
+  }
+
+  const { token } = req.query;
+
+  if (!token) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Token de sesión requerido." });
+  }
+
+  try {
+    const supabase = createAdminClient();
+
+    // 1. Consultar la sesión del formulario
+    const { data: sesion, error: sesionErr } = await supabase
+      .from("sesiones_formulario")
+      .select("*")
+      .eq("token", token)
+      .single();
+
+    if (sesionErr || !sesion) {
+      console.warn(`[validar-token] Token inválido o no encontrado: ${token}`);
+      return res
+        .status(404)
+        .json({ success: false, message: "Enlace no válido. Solicita uno nuevo." });
+    }
+
+    // 2. Verificar si ya fue utilizado
+    if (sesion.usado) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Este enlace ya fue utilizado para realizar un pedido." });
+    }
+
+    // 3. Verificar si expiró
+    const expiraAt = new Date(sesion.expira_at);
+    const ahora = new Date();
+    if (expiraAt < ahora) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Este enlace ha expirado. Solicita uno nuevo por WhatsApp." });
+    }
+
+    // 4. Obtener información del cliente asociado
+    const { data: cliente, error: clienteErr } = await supabase
+      .from("clientes")
+      .select("*")
+      .eq("id", sesion.cliente_id)
+      .single();
+
+    if (clienteErr || !cliente) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Cliente asociado no encontrado." });
+    }
+
+    return res.status(200).json({
+      success: true,
+      cliente_id: sesion.cliente_id,
+      cliente: {
+        id: cliente.id,
+        nombre_tienda: cliente.nombre_tienda,
+        nombre_contacto: cliente.nombre_contacto,
+        whatsapp: cliente.whatsapp,
+        sector: cliente.sector,
+        latitud: cliente.latitud,
+        longitud: cliente.longitud,
+      },
+    });
+  } catch (err) {
+    console.error("[validar-token] Error general:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Error interno al validar el token de sesión.",
+      error: err.message,
+    });
+  }
+}

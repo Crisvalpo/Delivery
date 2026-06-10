@@ -13,11 +13,11 @@ export default async function handler(req, res) {
       .json({ success: false, message: `Método ${req.method} no permitido` });
   }
 
-  const { cliente_id, productos_seleccionados } = req.body;
+  const { cliente_id, token, productos_seleccionados } = req.body;
 
   // Validación de datos
   if (
-    !cliente_id ||
+    (!cliente_id && !token) ||
     !Array.isArray(productos_seleccionados) ||
     productos_seleccionados.length === 0
   ) {
@@ -26,12 +26,45 @@ export default async function handler(req, res) {
       .json({ success: false, message: "Datos incompletos o inválidos." });
   }
 
+  const identityInfo = token ? `token ${token}` : `cliente ${cliente_id}`;
   console.log(
-    `[LukeDelivery API] Pedido de ${cliente_id} con ${productos_seleccionados.length} ítems`
+    `[LukeDelivery API] Pedido de ${identityInfo} con ${productos_seleccionados.length} ítems`
   );
 
   try {
     const supabase = createAdminClient();
+
+    let finalClienteId = cliente_id;
+
+    // Validar token si viene en el request
+    if (token) {
+      const { data: sesion, error: sesionErr } = await supabase
+        .from("sesiones_formulario")
+        .select("*")
+        .eq("token", token)
+        .single();
+
+      if (sesionErr || !sesion) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Token de sesión no válido." });
+      }
+
+      if (sesion.usado) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Este enlace ya fue utilizado para realizar un pedido." });
+      }
+
+      const expiraAt = new Date(sesion.expira_at);
+      if (expiraAt < new Date()) {
+        return res
+          .status(400)
+          .json({ success: false, message: "El enlace de esta sesión ha expirado." });
+      }
+
+      finalClienteId = sesion.cliente_id;
+    }
 
     // 1. Consulta eficiente: una sola query con filtro IN
     const ids = productos_seleccionados.map((p) => p.id);
@@ -100,11 +133,11 @@ export default async function handler(req, res) {
     const totalPagar = totalNeto + flete;
 
     // 6. Info del cliente (best-effort)
-    let cliente = { id: cliente_id, nombre_tienda: "Cliente Piloto" };
+    let cliente = { id: finalClienteId, nombre_tienda: "Cliente Piloto" };
     const { data: dbCliente } = await supabase
       .from("clientes")
       .select("*")
-      .eq("id", cliente_id)
+      .eq("id", finalClienteId)
       .single();
 
     if (dbCliente) cliente = dbCliente;
@@ -113,7 +146,7 @@ export default async function handler(req, res) {
     const { data: pedidoData, error: pedidoErr } = await supabase
       .from("pedidos")
       .insert({
-        cliente_id,
+        cliente_id: finalClienteId,
         total_neto: totalNeto,
         flete,
         total_pagar: totalPagar,
@@ -154,6 +187,18 @@ export default async function handler(req, res) {
         message: "Error al guardar los detalles del pedido en la base de datos.",
         error: itemsErr.message,
       });
+    }
+
+    // Si usamos un token y el pedido se guardó correctamente, marcarlo como usado
+    if (token) {
+      const { error: tokenUpdateErr } = await supabase
+        .from("sesiones_formulario")
+        .update({ usado: true })
+        .eq("token", token);
+
+      if (tokenUpdateErr) {
+        console.error("[LukeDelivery API] Error al marcar token como usado:", tokenUpdateErr);
+      }
     }
 
     // 7. Payload consolidado

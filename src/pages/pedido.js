@@ -19,40 +19,76 @@ const MONTO_MINIMO = 35000;
 
 export default function PedidoPage() {
   const router = useRouter();
-  const { cliente_id } = router.query;
 
   const [productos, setProductos] = useState([]);
   const [carrito, setCarrito] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [tokenError, setTokenError] = useState(null);
+  const [clienteInfo, setClienteInfo] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [orderSummary, setOrderSummary] = useState(null);
 
   const supabase = createClient();
 
-  // --- Carga de productos ---
+  // --- Carga de productos e inicialización de sesión ---
   useEffect(() => {
-    async function fetchProductos() {
+    if (!router.isReady) return;
+
+    async function initializePage() {
+      setLoading(true);
+      setError(null);
+      setTokenError(null);
+
+      const { cliente_id, token } = router.query;
+
       try {
-        const { data, error: pgErr } = await supabase
+        // 1. Validar identificación por token o ID directo
+        if (token) {
+          const res = await fetch(`/api/validar-token?token=${token}`);
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.message || "Token de sesión no válido.");
+          }
+          setClienteInfo(data.cliente);
+        } else if (cliente_id) {
+          // Retrocompatibilidad con cliente_id directo (ej: para pruebas locales/admin)
+          const { data, error: cliErr } = await supabase
+            .from("clientes")
+            .select("*")
+            .eq("id", cliente_id)
+            .single();
+
+          if (!cliErr && data) {
+            setClienteInfo(data);
+          } else {
+            setClienteInfo({ id: cliente_id, nombre_tienda: "Cliente Piloto" });
+          }
+        } else {
+          throw new Error("Acceso denegado. Se requiere un enlace de sesión de WhatsApp válido.");
+        }
+
+        // 2. Cargar productos
+        const { data: pgProds, error: pgErr } = await supabase
           .from("productos")
           .select("*")
           .eq("disponible", true)
           .order("nombre");
 
         if (pgErr) throw pgErr;
-        setProductos(data || []);
+        setProductos(pgProds || []);
       } catch (err) {
-        console.error("[LukeDelivery] Error cargando productos:", err);
-        setError("No se pudieron cargar los productos.");
+        console.error("[LukeDelivery] Error de inicialización:", err);
+        setTokenError(err.message);
       } finally {
         setLoading(false);
       }
     }
-    fetchProductos();
+
+    initializePage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [router.isReady, router.query]);
 
   // --- Funciones del carrito ---
   const setCantidad = (id, delta) => {
@@ -85,11 +121,13 @@ export default function PedidoPage() {
     );
 
     try {
+      const { cliente_id, token } = router.query;
       const res = await fetch("/api/pedido", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          cliente_id: cliente_id || "piloto-test",
+          cliente_id: cliente_id,
+          token: token,
           productos_seleccionados: productosSeleccionados,
         }),
       });
@@ -155,10 +193,10 @@ export default function PedidoPage() {
           </div>
           <div>
             <h1 className="text-base font-bold text-text-primary leading-none tracking-tight">
-              LukeDelivery
+              {clienteInfo ? clienteInfo.nombre_tienda : "LukeDelivery"}
             </h1>
             <span className="text-[10px] text-text-dim font-medium">
-              Honestidad Radical B2B
+              {clienteInfo ? `Hola, ${clienteInfo.nombre_contacto}` : "Honestidad Radical B2B"}
             </span>
           </div>
         </div>
@@ -235,8 +273,29 @@ export default function PedidoPage() {
           </div>
         )}
 
+        {/* ===== TOKEN ERROR (ACCESO DENEGADO) ===== */}
+        {tokenError && (
+          <div className="bg-bg-surface border border-red-500/30 rounded-2xl p-6 text-center my-10 max-w-sm mx-auto shadow-xl">
+            <div className="mx-auto bg-red-500/10 text-red-500 p-4 rounded-full w-fit mb-4">
+              <AlertTriangle className="h-10 w-10" />
+            </div>
+            <h3 className="text-lg font-bold text-text-primary mb-2">
+              Acceso Denegado
+            </h3>
+            <p className="text-sm text-text-secondary mb-6 leading-relaxed">
+              {tokenError}
+            </p>
+            <a
+              href="https://wa.me/56935264052"
+              className="inline-flex items-center justify-center bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-3 px-6 rounded-xl transition-all w-full text-sm shadow-lg shadow-[#25D366]/20"
+            >
+              📲 Solicitar Enlace por WhatsApp
+            </a>
+          </div>
+        )}
+
         {/* ===== ERROR ===== */}
-        {error && (
+        {!tokenError && error && (
           <div className="bg-error-bg border border-error/20 text-red-200 text-sm p-3.5 rounded-xl mb-5 flex gap-2 items-start">
             <AlertTriangle className="h-4 w-4 text-error mt-0.5 shrink-0" />
             <span>{error}</span>
@@ -244,20 +303,20 @@ export default function PedidoPage() {
         )}
 
         {/* ===== LOADING ===== */}
-        {loading ? (
+        {!tokenError && loading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-brand" />
             <p className="text-sm text-text-secondary">
               Cargando precios de costo...
             </p>
           </div>
-        ) : productos.length === 0 ? (
+        ) : !tokenError && productos.length === 0 ? (
           <div className="text-center py-24">
             <p className="text-text-secondary">
               No hay productos disponibles en este momento.
             </p>
           </div>
-        ) : (
+        ) : !tokenError && (
           /* ===== PRODUCT LIST ===== */
           <div className="space-y-2.5">
             {productos.map((p) => {
@@ -349,7 +408,8 @@ export default function PedidoPage() {
       </main>
 
       {/* ===== STICKY FOOTER: REGLA DEL FURGÓN ===== */}
-      <footer className="fixed bottom-0 inset-x-0 bg-bg-surface/95 backdrop-blur-xl border-t border-border py-4 px-5 z-50">
+      {!tokenError && !loading && productos.length > 0 && (
+        <footer className="fixed bottom-0 inset-x-0 bg-bg-surface/95 backdrop-blur-xl border-t border-border py-4 px-5 z-50">
         <div className="max-w-lg mx-auto">
           {/* Progress bar */}
           <div className="mb-3">
@@ -407,6 +467,7 @@ export default function PedidoPage() {
           )}
         </div>
       </footer>
+      )}
     </div>
   );
 }
