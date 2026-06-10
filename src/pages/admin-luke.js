@@ -542,7 +542,7 @@ export default function AdminLukePage() {
 
       {/* ===== MODAL REGISTRO ===== */}
       {showModal && clickCoords && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
@@ -708,7 +708,7 @@ export default function AdminLukePage() {
 
       {/* ===== SIDEBAR PEDIDOS ===== */}
       {sidebarCliente && (
-        <div className="fixed inset-0 z-50 flex justify-end">
+        <div className="fixed inset-0 z-[9999] flex justify-end">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
@@ -716,7 +716,7 @@ export default function AdminLukePage() {
           />
 
           {/* Sidebar Panel */}
-          <div className="relative bg-bg-surface border-l border-border w-full max-w-md h-full shadow-2xl flex flex-col z-50 animate-slide-left">
+          <div className="relative bg-bg-surface border-l border-border w-full max-w-md h-full shadow-2xl flex flex-col z-[9999] animate-slide-left">
             {/* Header */}
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div>
@@ -860,7 +860,7 @@ export default function AdminLukePage() {
         </div>
       )}
 
-      {/* ===== CUSTOM PIN PULSING STYLE ===== */}
+      {/* ===== CUSTOM PIN PULSING AND SIDEBAR SLIDE STYLE ===== */}
       <style>{`
         @keyframes pulso-halo {
           0% {
@@ -875,6 +875,18 @@ export default function AdminLukePage() {
         }
         .pin-pulsante {
           animation: pulso-halo 1.6s infinite ease-in-out !important;
+        }
+
+        @keyframes slide-left {
+          from {
+            transform: translateX(100%);
+          }
+          to {
+            transform: translateX(0);
+          }
+        }
+        .animate-slide-left {
+          animation: slide-left 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
       `}</style>
     </div>
