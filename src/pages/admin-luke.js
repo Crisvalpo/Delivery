@@ -36,6 +36,16 @@ const PRIORIDAD_COLORES = {
   Baja: "#ef4444",
 };
 
+const cleanText = (str) => {
+  if (!str) return "";
+  return str.replace(/Est\?\?ndar/g, "Estándar")
+            .replace(/Bid\?\?n/g, "Bidón")
+            .replace(/EstÃ¡ndar/g, "Estándar")
+            .replace(/BidÃ³n/g, "Bidón")
+            .replace(/Ã¡/g, "á")
+            .replace(/Ã³/g, "ó");
+};
+
 export default function AdminLukePage() {
   const [clientes, setClientes] = useState([]);
   const [pedidos, setPedidos] = useState([]);
@@ -1091,9 +1101,9 @@ export default function AdminLukePage() {
           />
 
           {/* Modal Container */}
-          <div className="relative bg-bg-surface border border-border rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-fade-in z-[9999]">
+          <div className="relative bg-bg-surface border border-border rounded-2xl w-full sm:max-w-4xl max-h-[90vh] sm:max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-fade-in z-[9999]">
             {/* Header */}
-            <div className="p-5 border-b border-border flex items-center justify-between">
+            <div className="p-5 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
                   <Package className="h-5 w-5 text-brand" />
@@ -1103,17 +1113,17 @@ export default function AdminLukePage() {
                   Gestiona los precios, disponibilidad y stock de tu furgón mayorista
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
                 <button
                   onClick={() => handleOpenProductForm(null)}
-                  className="bg-brand hover:bg-brand-hover text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1 transition-colors cursor-pointer"
+                  className="bg-brand hover:bg-brand-hover text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1 transition-colors cursor-pointer w-full sm:w-auto justify-center"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Nuevo Producto</span>
                 </button>
                 <button
                   onClick={() => setShowCatalogModal(false)}
-                  className="p-1.5 rounded-lg bg-bg-surface-2 border border-border text-text-dim hover:text-text-primary transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg bg-bg-surface-2 border border-border text-text-dim hover:text-text-primary transition-colors cursor-pointer shrink-0"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -1129,77 +1139,151 @@ export default function AdminLukePage() {
                   <p className="text-xs mt-0.5">Haz clic en "Nuevo Producto" para agregar uno.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-text-secondary border-collapse">
-                    <thead>
-                      <tr className="border-b border-border text-text-dim uppercase tracking-wider text-[9px] font-bold">
-                        <th className="pb-3 pl-2">Imagen</th>
-                        <th className="pb-3">Nombre</th>
-                        <th className="pb-3">Formato</th>
-                        <th className="pb-3">Precio Venta</th>
-                        <th className="pb-3">Costo</th>
-                        <th className="pb-3">Categoría</th>
-                        <th className="pb-3 text-center">Disponible</th>
-                        <th className="pb-3 text-right pr-2">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/40">
-                      {productos.map((prod) => (
-                        <tr key={prod.id} className="hover:bg-bg-surface-2/30 transition-colors">
-                          <td className="py-3 pl-2">
-                            {prod.url_imagen_retail ? (
-                              <img
-                                src={prod.url_imagen_retail}
-                                alt={prod.nombre}
-                                className="w-8 h-8 rounded-lg object-cover bg-bg-surface-2"
-                              />
-                            ) : (
-                              <div className="w-8 h-8 rounded-lg bg-bg-surface-2 flex items-center justify-center">
-                                <Package className="h-4 w-4 text-text-dim" />
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-3 font-semibold text-text-primary">{prod.nombre}</td>
-                          <td className="py-3">{prod.formato_venta}</td>
-                          <td className="py-3 font-bold text-text-primary">${prod.precio.toLocaleString("es-CL")}</td>
-                          <td className="py-3 text-text-dim">${prod.precio_costo.toLocaleString("es-CL")}</td>
-                          <td className="py-3">
+                <>
+                  {/* Vista Mobile: Lista de Tarjetas (Cards) */}
+                  <div className="block md:hidden space-y-3">
+                    {productos.map((prod) => (
+                      <div key={prod.id} className="bg-bg-surface-2 border border-border/60 rounded-2xl p-4 flex flex-col gap-3">
+                        <div className="flex items-center gap-3">
+                          {prod.url_imagen_retail ? (
+                            <img
+                              src={prod.url_imagen_retail}
+                              alt={cleanText(prod.nombre)}
+                              className="w-12 h-12 rounded-xl object-cover bg-bg-surface-3"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-bg-surface-3 flex items-center justify-center shrink-0">
+                              <Package className="h-6 w-6 text-text-dim" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-sm text-text-primary truncate">{cleanText(prod.nombre)}</h4>
+                            <p className="text-xs text-text-dim">{cleanText(prod.formato_venta)}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleOpenProductForm(prod)}
+                              className="p-2 rounded-xl bg-bg-surface border border-border text-text-secondary hover:text-brand hover:border-brand/40 transition-colors cursor-pointer"
+                              title="Editar producto"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between border-t border-border/30 pt-3 text-xs">
+                          <div className="flex gap-4">
+                            <div>
+                              <span className="text-[9px] text-text-dim block uppercase font-bold tracking-wider">P. Venta</span>
+                              <span className="font-bold text-text-primary text-xs">${prod.precio.toLocaleString("es-CL")}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] text-text-dim block uppercase font-bold tracking-wider">Costo</span>
+                              <span className="text-text-dim text-xs">${prod.precio_costo.toLocaleString("es-CL")}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
                             <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
                               prod.categoria_logistica === "Pesado"
                                 ? "bg-accent/10 text-accent border border-accent/20"
                                 : "bg-brand/10 text-brand border border-brand/20"
                             }`}>
-                              {prod.categoria_logistica}
+                              {cleanText(prod.categoria_logistica)}
                             </span>
-                          </td>
-                          <td className="py-3 text-center">
-                            <button
-                              onClick={() => handleToggleDisponibilidad(prod)}
-                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                prod.disponible ? "bg-brand animate-pulse-glow" : "bg-bg-app border-border"
-                              }`}
-                            >
-                              <span
-                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                  prod.disponible ? "translate-x-4" : "translate-x-0"
+                            <div className="flex items-center gap-1.5 bg-bg-surface border border-border px-2 py-0.5 rounded-lg">
+                              <span className="text-[9px] font-bold text-text-secondary">Disp</span>
+                              <button
+                                onClick={() => handleToggleDisponibilidad(prod)}
+                                className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                  prod.disponible ? "bg-brand" : "bg-bg-surface-3"
                                 }`}
-                              />
-                            </button>
-                          </td>
-                          <td className="py-3 text-right pr-2">
-                            <button
-                              onClick={() => handleOpenProductForm(prod)}
-                              className="p-1.5 rounded-lg bg-bg-surface-2 border border-border text-text-secondary hover:text-brand hover:border-brand/40 transition-colors cursor-pointer inline-flex items-center justify-center"
-                              title="Editar producto"
-                            >
-                              <Edit className="h-3.5 w-3.5" />
-                            </button>
-                          </td>
+                              >
+                                <span
+                                  className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                    prod.disponible ? "translate-x-3.5" : "translate-x-0"
+                                  }`}
+                                />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Vista Desktop: Tabla Tradicional */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-xs text-text-secondary border-collapse">
+                      <thead>
+                        <tr className="border-b border-border text-text-dim uppercase tracking-wider text-[9px] font-bold">
+                          <th className="pb-3 pl-2">Imagen</th>
+                          <th className="pb-3">Nombre</th>
+                          <th className="pb-3">Formato</th>
+                          <th className="pb-3">Precio Venta</th>
+                          <th className="pb-3">Costo</th>
+                          <th className="pb-3">Categoría</th>
+                          <th className="pb-3 text-center">Disponible</th>
+                          <th className="pb-3 text-right pr-2">Acciones</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-border/40">
+                        {productos.map((prod) => (
+                          <tr key={prod.id} className="hover:bg-bg-surface-2/30 transition-colors">
+                            <td className="py-3 pl-2">
+                              {prod.url_imagen_retail ? (
+                                <img
+                                  src={prod.url_imagen_retail}
+                                  alt={cleanText(prod.nombre)}
+                                  className="w-8 h-8 rounded-lg object-cover bg-bg-surface-2"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-lg bg-bg-surface-2 flex items-center justify-center">
+                                  <Package className="h-4 w-4 text-text-dim" />
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3 font-semibold text-text-primary">{cleanText(prod.nombre)}</td>
+                            <td className="py-3">{cleanText(prod.formato_venta)}</td>
+                            <td className="py-3 font-bold text-text-primary">${prod.precio.toLocaleString("es-CL")}</td>
+                            <td className="py-3 text-text-dim">${prod.precio_costo.toLocaleString("es-CL")}</td>
+                            <td className="py-3">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                prod.categoria_logistica === "Pesado"
+                                  ? "bg-accent/10 text-accent border border-accent/20"
+                                  : "bg-brand/10 text-brand border border-brand/20"
+                              }`}>
+                                {cleanText(prod.categoria_logistica)}
+                              </span>
+                            </td>
+                            <td className="py-3 text-center">
+                              <button
+                                onClick={() => handleToggleDisponibilidad(prod)}
+                                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                  prod.disponible ? "bg-brand animate-pulse-glow" : "bg-bg-app border-border"
+                                }`}
+                              >
+                                <span
+                                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                    prod.disponible ? "translate-x-4" : "translate-x-0"
+                                  }`}
+                                />
+                              </button>
+                            </td>
+                            <td className="py-3 text-right pr-2">
+                              <button
+                                onClick={() => handleOpenProductForm(prod)}
+                                className="p-1.5 rounded-lg bg-bg-surface-2 border border-border text-text-secondary hover:text-brand hover:border-brand/40 transition-colors cursor-pointer inline-flex items-center justify-center"
+                                title="Editar producto"
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -1324,7 +1408,7 @@ export default function AdminLukePage() {
           />
 
           {/* Form container */}
-          <div className="relative bg-bg-surface border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl animate-scale-up z-[10000]">
+          <div className="relative bg-bg-surface border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl animate-scale-up z-[10000] max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setShowProductForm(false)}
               className="absolute top-4 right-4 text-text-dim hover:text-text-primary transition-colors cursor-pointer"
