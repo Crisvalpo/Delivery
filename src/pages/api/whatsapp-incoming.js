@@ -388,21 +388,14 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
         };
 
         const tieneAudioEntrante = !!(audio && audio.data);
-        if (tieneAudioEntrante) {
-          generationConfig.responseMimeType = "audio/mp3";
-          generationConfig.speechConfig = {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName: "Aoede" // Opciones: Puck, Charon, Kore, Fenrir, Aoede
-              }
-            }
-          };
-        }
-
         audioBase64ParaEnviar = null;
 
         try {
-          console.log(`[whatsapp-incoming] Llamando a Gemini (${tieneAudioEntrante ? 'Audio' : 'Texto'}) con modelo: ${modelName}, temp: ${temperature}. Admin: ${esAdmin}`);
+          // --- PASO 1: Llamada de COMPRENSIÓN ---
+          // Siempre usamos el modelo de texto para procesar el mensaje (con tools si es admin).
+          // Si la entrada es audio, Gemini la transcribe y genera texto de respuesta.
+          // Nunca mezclamos 'tools' con generación de audio en la misma llamada.
+          console.log(`[whatsapp-incoming] Llamando a Gemini (${tieneAudioEntrante ? 'Audio-entrada' : 'Texto'}) con modelo: ${modelName}, temp: ${temperature}. Admin: ${esAdmin}`);
           const geminiRes = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`,
             {
@@ -419,7 +412,8 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
           );
 
           if (!geminiRes.ok) {
-            throw new Error(`Gemini API returned status ${geminiRes.status}`);
+            const errBody = await geminiRes.text();
+            throw new Error(`Gemini API returned status ${geminiRes.status}: ${errBody.substring(0, 200)}`);
           }
 
           const geminiData = await geminiRes.json();
@@ -541,7 +535,7 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
 
             console.log(`[whatsapp-incoming] Resultado de DB para Gemini: ${dbResult}`);
 
-            // Llamada de seguimiento a Gemini
+            // Llamada de seguimiento a Gemini (solo texto, sin audio)
             try {
               const finalRes = await fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`,
@@ -557,7 +551,7 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
                       { role: "function", parts: [{ functionResponse: { name: name, response: { result: dbResult } } }] }
                     ],
                     tools: tools,
-                    generationConfig: generationConfig
+                    generationConfig: { temperature: temperature }
                   }),
                 }
               );
@@ -570,16 +564,9 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
               const finalParts = finalData.candidates?.[0]?.content?.parts || [];
               let finalResponseText = "";
               for (const part of finalParts) {
-                if (part.inlineData && part.inlineData.mimeType.startsWith('audio/')) {
-                  audioBase64ParaEnviar = part.inlineData.data;
-                } else if (part.text) {
-                  finalResponseText += part.text + " ";
-                }
+                if (part.text) finalResponseText += part.text + " ";
               }
-              responseText = finalResponseText.trim();
-              if (!responseText && audioBase64ParaEnviar) {
-                responseText = `[Nota de voz generada por el Bot: Operación realizada en el catálogo. Detalle: ${dbResult}]`;
-              }
+              responseText = finalResponseText.trim() || `Operación completada. Detalle: ${dbResult}`;
             } catch (finalErr) {
               console.error("[whatsapp-incoming] Error en segunda llamada a Gemini:", finalErr.message);
               responseText = `Operación completada en el catálogo. Detalle: ${dbResult}`;
@@ -587,17 +574,56 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
           } else {
             let extractedText = "";
             for (const part of candidateParts) {
-              if (part.inlineData && part.inlineData.mimeType.startsWith('audio/')) {
-                audioBase64ParaEnviar = part.inlineData.data;
-              } else if (part.text) {
-                extractedText += part.text + " ";
-              }
+              if (part.text) extractedText += part.text + " ";
             }
-            responseText = extractedText.trim();
-            if (!responseText && audioBase64ParaEnviar) {
-              responseText = "[Nota de voz generada por el Bot]";
-            } else if (!responseText && !audioBase64ParaEnviar) {
-              responseText = `¡Hola! Si deseas realizar un pedido, responde con la palabra "pedido".`;
+            responseText = extractedText.trim() || `¡Hola! Si deseas realizar un pedido, responde con la palabra "pedido".`;
+          }
+
+          // --- PASO 2: Síntesis de voz (TTS) si la entrada fue audio ---
+          // Solo si el usuario envió nota de voz, convertimos la respuesta de texto a audio.
+          if (tieneAudioEntrante && responseText) {
+            try {
+              const ttsModelName = "gemini-2.5-flash-preview-tts";
+              console.log(`[whatsapp-incoming] Convirtiendo respuesta a audio con modelo TTS: ${ttsModelName}`);
+              const ttsRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${ttsModelName}:generateContent?key=${geminiKey}`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    contents: [{ parts: [{ text: responseText }] }],
+                    generationConfig: {
+                      responseModalities: ["AUDIO"],
+                      speechConfig: {
+                        voiceConfig: {
+                          prebuiltVoiceConfig: { voiceName: "Aoede" }
+                        }
+                      }
+                    }
+                  })
+                }
+              );
+
+              if (!ttsRes.ok) {
+                const ttsErrBody = await ttsRes.text();
+                console.error(`[whatsapp-incoming] Error en llamada TTS (${ttsRes.status}): ${ttsErrBody.substring(0, 300)}`);
+              } else {
+                const ttsData = await ttsRes.json();
+                const ttsParts = ttsData.candidates?.[0]?.content?.parts || [];
+                for (const part of ttsParts) {
+                  if (part.inlineData && part.inlineData.mimeType && part.inlineData.mimeType.startsWith('audio/')) {
+                    audioBase64ParaEnviar = part.inlineData.data;
+                    console.log(`[whatsapp-incoming] Audio TTS generado correctamente (${part.inlineData.mimeType}).`);
+                    break;
+                  }
+                }
+                if (!audioBase64ParaEnviar) {
+                  console.warn("[whatsapp-incoming] TTS no retornó audio. Enviando respuesta de texto.");
+                }
+              }
+            } catch (ttsErr) {
+              console.error("[whatsapp-incoming] Error en síntesis TTS:", ttsErr.message);
+              // El fallback es enviar texto, que ya está en responseText
             }
           }
 
