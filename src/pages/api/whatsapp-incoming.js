@@ -123,7 +123,7 @@ export default async function handler(req, res) {
           responseText = `¡Hola! Bienvenido a LukeDelivery. Si deseas registrarte y ver nuestro catálogo, responde con la palabra "pedido".`;
         }
       } else {
-        // Obtener el prompt de sistema y parámetros dinámicos de Supabase, con fallbacks
+        // 1. Obtener el prompt de sistema y parámetros dinámicos de Supabase
         let promptSistema = `
 Actúas como "Jaime", el asistente virtual amable de LukeDelivery B2B, un sistema de distribución mayorista para almacenes en Placilla y Curauma (Chile).
 Tu objetivo es responder de forma muy breve, atenta y concisa a los clientes (dueños de almacén) vía WhatsApp.
@@ -155,10 +155,108 @@ Normas de comportamiento:
           }
         }
 
+        // 2. Validar si el remitente es un trabajador activo y su rol para habilitar herramientas
+        const { data: trabajador } = await supabase
+          .from("trabajadores")
+          .select("nombre, rol")
+          .eq("whatsapp", phoneClean)
+          .eq("activo", true)
+          .maybeSingle();
+
+        const esAdmin = trabajador && (trabajador.rol === "Administrador" || trabajador.rol === "Vendedor");
+
+        // 3. Declarar herramientas (Function Declarations) de Gemini si es administrador
+        const tools = esAdmin ? [
+          {
+            functionDeclarations: [
+              {
+                name: "actualizar_precio_producto",
+                description: "Actualiza el precio de venta de un producto en el catálogo. Usa esta función cuando el administrador indique que el precio de un producto cambió, varió o debe ser modificado.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    nombre_producto: {
+                      type: "STRING",
+                      description: "El nombre aproximado o exacto del producto a modificar (ej. 'Malla de Papas 25kg')"
+                    },
+                    nuevo_precio: {
+                      type: "INTEGER",
+                      description: "El nuevo precio de venta como número entero en pesos chilenos (sin puntos ni signos, ej. 10000)"
+                    }
+                  },
+                  required: ["nombre_producto", "nuevo_precio"]
+                }
+              },
+              {
+                name: "crear_producto",
+                description: "Agrega un nuevo producto al catálogo de LukeDelivery. Usa esta función cuando el administrador pida registrar o agregar un nuevo producto indicando sus detalles.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    nombre: {
+                      type: "STRING",
+                      description: "Nombre del producto (ej. 'Malla de Papas 25kg')"
+                    },
+                    formato_venta: {
+                      type: "STRING",
+                      description: "El formato de venta (ej. 'Saco 25kg', 'Bolsa 1u')"
+                    },
+                    precio: {
+                      type: "INTEGER",
+                      description: "El precio de venta al público como entero en pesos (ej. 12000)"
+                    },
+                    precio_costo: {
+                      type: "INTEGER",
+                      description: "El precio de costo del mayorista como entero en pesos (ej. 10000)"
+                    },
+                    categoria_logistica: {
+                      type: "STRING",
+                      enum: ["Pesado", "Estándar"],
+                      description: "La categoría logística. Usa 'Pesado' si pesa más de 5kg o es muy grande/voluminoso, de lo contrario usa 'Estándar'."
+                    }
+                  },
+                  required: ["nombre", "formato_venta", "precio", "precio_costo", "categoria_logistica"]
+                }
+              },
+              {
+                name: "cambiar_disponibilidad_producto",
+                description: "Habilita o deshabilita la disponibilidad de un producto en el catálogo. Usa esta función cuando el administrador indique deshabilitar, habilitar, agotar, activar o desactivar la venta de un producto.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    nombre_producto: {
+                      type: "STRING",
+                      description: "El nombre del producto."
+                    },
+                    disponible: {
+                      type: "BOOLEAN",
+                      description: "Establece true para marcarlo como disponible/activo para la venta, o false para marcarlo como agotado/deshabilitado/inactivo."
+                    }
+                  },
+                  required: ["nombre_producto", "disponible"]
+                }
+              },
+              {
+                name: "eliminar_producto",
+                description: "Realiza un borrado lógico (desactivación) de un producto del catálogo. Usa esta función cuando el administrador pida eliminar o borrar un producto del catálogo.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    nombre_producto: {
+                      type: "STRING",
+                      description: "El nombre del producto a eliminar."
+                    }
+                  },
+                  required: ["nombre_producto"]
+                }
+              }
+            ]
+          }
+        ] : undefined;
+
         const parts = [];
 
         if (audio && audio.data) {
-          // Agregar la parte de audio
           parts.push({
             inlineData: {
               mimeType: audio.mimeType || "audio/ogg",
@@ -166,7 +264,6 @@ Normas de comportamiento:
             }
           });
 
-          // Agregar las instrucciones correspondientes
           parts.push({
             text: `
 ${promptSistema}
@@ -178,7 +275,6 @@ Por favor, escucha la nota de voz anterior del usuario y respóndele de forma at
 Respuesta del asistente:`
           });
         } else {
-          // Si es solo texto
           parts.push({
             text: `
 ${promptSistema}
@@ -192,7 +288,7 @@ Respuesta del asistente:`
         }
 
         try {
-          console.log(`[whatsapp-incoming] Llamando a Gemini (${audio ? 'Audio' : 'Texto'}) con modelo: ${modelName}, temp: ${temperature}`);
+          console.log(`[whatsapp-incoming] Llamando a Gemini (${audio ? 'Audio' : 'Texto'}) con modelo: ${modelName}, temp: ${temperature}. Admin: ${esAdmin}`);
           const geminiRes = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`,
             {
@@ -202,6 +298,7 @@ Respuesta del asistente:`
               },
               body: JSON.stringify({
                 contents: [{ parts: parts }],
+                tools: tools,
                 generationConfig: {
                   temperature: temperature,
                 }
@@ -214,9 +311,112 @@ Respuesta del asistente:`
           }
 
           const geminiData = await geminiRes.json();
-          responseText =
-            geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
-            `¡Hola! Si quieres hacer un pedido, escribe "pedido" y te enviaré el link.`;
+          const candidatePart = geminiData.candidates?.[0]?.content?.parts?.[0];
+
+          if (candidatePart?.functionCall) {
+            const { name, args } = candidatePart.functionCall;
+            let dbResult = "";
+            console.log(`[whatsapp-incoming] Interceptada llamada a funcion: ${name} con args:`, args);
+
+            try {
+              if (name === "actualizar_precio_producto") {
+                const { nombre_producto, nuevo_precio } = args;
+                const { error } = await supabase
+                  .from("productos")
+                  .update({ precio: nuevo_precio })
+                  .ilike("nombre", `%${nombre_producto}%`);
+                
+                dbResult = error 
+                  ? `Error al actualizar: ${error.message}` 
+                  : `Éxito: El precio del producto que coincide con "${nombre_producto}" ha sido actualizado a $${nuevo_precio.toLocaleString("es-CL")} con éxito.`;
+              } 
+              else if (name === "crear_producto") {
+                const { nombre, formato_venta, precio, precio_costo, categoria_logistica } = args;
+                const { error } = await supabase
+                  .from("productos")
+                  .insert([{
+                    nombre,
+                    formato_venta,
+                    precio,
+                    precio_costo,
+                    categoria_logistica,
+                    disponible: true,
+                    activo: true
+                  }]);
+
+                dbResult = error
+                  ? `Error al crear: ${error.message}`
+                  : `Éxito: El producto "${nombre}" (${formato_venta}) ha sido agregado al catálogo con un precio de venta de $${precio.toLocaleString("es-CL")} y costo de $${precio_costo.toLocaleString("es-CL")}.`;
+              }
+              else if (name === "cambiar_disponibilidad_producto") {
+                const { nombre_producto, disponible } = args;
+                const { error } = await supabase
+                  .from("productos")
+                  .update({ disponible: disponible })
+                  .ilike("nombre", `%${nombre_producto}%`);
+
+                dbResult = error
+                  ? `Error al cambiar disponibilidad: ${error.message}`
+                  : `Éxito: La disponibilidad del producto que coincide con "${nombre_producto}" ha sido cambiada a ${disponible ? "Disponible" : "Agotado/Deshabilitado"}.`;
+              }
+              else if (name === "eliminar_producto") {
+                const { nombre_producto } = args;
+                const { error } = await supabase
+                  .from("productos")
+                  .update({ activo: false })
+                  .ilike("nombre", `%${nombre_producto}%`);
+
+                dbResult = error
+                  ? `Error al eliminar: ${error.message}`
+                  : `Éxito: El producto que coincide con "${nombre_producto}" ha sido desactivado del catálogo con éxito.`;
+              }
+            } catch (dbErr) {
+              console.error("[whatsapp-incoming] Error en ejecución de DB para functionCall:", dbErr.message);
+              dbResult = `Error de base de datos interno: ${dbErr.message}`;
+            }
+
+            console.log(`[whatsapp-incoming] Resultado de DB para Gemini: ${dbResult}`);
+
+            // Llamada de seguimiento a Gemini
+            try {
+              const finalRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    contents: [
+                      { role: "user", parts: parts },
+                      { role: "model", parts: [candidatePart] },
+                      { role: "function", parts: [{ functionResponse: { name: name, response: { result: dbResult } } }] }
+                    ],
+                    tools: tools,
+                    generationConfig: {
+                      temperature: temperature,
+                    }
+                  }),
+                }
+              );
+
+              if (!finalRes.ok) {
+                throw new Error(`Second Gemini call failed with status ${finalRes.status}`);
+              }
+
+              const finalData = await finalRes.json();
+              responseText =
+                finalData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
+                `Operación realizada en el catálogo. Detalle: ${dbResult}`;
+            } catch (finalErr) {
+              console.error("[whatsapp-incoming] Error en segunda llamada a Gemini:", finalErr.message);
+              responseText = `Operación completada en el catálogo. Detalle: ${dbResult}`;
+            }
+          } else {
+            responseText =
+              candidatePart?.text?.trim() ||
+              `¡Hola! Si deseas realizar un pedido, responde con la palabra "pedido".`;
+          }
         } catch (geminiErr) {
           console.error("[whatsapp-incoming] Error llamando a Gemini:", geminiErr.message);
           responseText = `¡Hola! Gusto en saludarte. Si quieres realizar un pedido, escribe "pedido" para generar tu enlace seguro.`;
