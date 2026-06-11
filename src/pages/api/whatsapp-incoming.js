@@ -42,7 +42,7 @@ export default async function handler(req, res) {
 
     const { data: clientes, error: clientError } = await supabase
       .from("clientes")
-      .select("id, nombre_contacto, nombre_tienda, whatsapp, whatsapp_lid")
+      .select("id, nombre_contacto, nombre_tienda, whatsapp, whatsapp_lid, bot_silenciado_hasta")
       .or(orConditions);
 
     if (clientError) {
@@ -51,6 +51,26 @@ export default async function handler(req, res) {
     }
 
     const cliente = clientes && clientes.length > 0 ? clientes[0] : null;
+
+    // 1.5. Validar silenciado activo (si está bloqueado por 5 horas)
+    if (cliente && cliente.bot_silenciado_hasta && new Date(cliente.bot_silenciado_hasta) > new Date()) {
+      console.log(`[whatsapp-incoming] Cliente ${phoneClean} está silenciado hasta ${cliente.bot_silenciado_hasta}. Ignorando mensaje.`);
+      return res.status(200).json({ success: true, message: "Bot silenciado temporalmente." });
+    }
+
+    // Registrar mensaje de entrada en el historial
+    const textoMensaje = audio ? "[Nota de Voz]" : message;
+    try {
+      await supabase
+        .from("mensajes_chat")
+        .insert([{
+          whatsapp: phoneClean,
+          remitente: "usuario",
+          contenido: textoMensaje
+        }]);
+    } catch (histErr) {
+      console.error("[whatsapp-incoming] Error guardando mensaje en historial:", histErr.message);
+    }
 
     // Si encontramos al cliente pero no tenía el LID registrado, lo registramos ahora de forma automática (self-healing)
     if (cliente && lidClean && cliente.whatsapp_lid !== lidClean) {
@@ -155,7 +175,21 @@ Normas de comportamiento:
           }
         }
 
-        // 2. Validar si el remitente es un trabajador activo y su rol para habilitar herramientas
+        // 2. Consultar historial de chats (últimos 15 mensajes)
+        const { data: historial } = await supabase
+          .from("mensajes_chat")
+          .select("remitente, contenido")
+          .eq("whatsapp", phoneClean)
+          .order("created_at", { ascending: false })
+          .limit(16); // Traemos 16 para excluir el mensaje actual que acabamos de insertar y dejar 15 de contexto
+
+        const historialPrevio = historial ? historial.filter((_, idx) => idx > 0) : [];
+        const historialCronologico = [...historialPrevio].reverse();
+        const historialTexto = historialCronologico.length > 0
+          ? historialCronologico.map(m => `${m.remitente === "usuario" ? "Cliente" : "Jaime"}: ${m.contenido}`).join("\n")
+          : "No hay historial de conversación reciente.";
+
+        // 3. Validar si el remitente es un trabajador activo y su rol para habilitar herramientas
         const { data: trabajador } = await supabase
           .from("trabajadores")
           .select("nombre, rol")
@@ -165,98 +199,118 @@ Normas de comportamiento:
 
         const esAdmin = trabajador && (trabajador.rol === "Administrador" || trabajador.rol === "Vendedor");
 
-        // 3. Declarar herramientas (Function Declarations) de Gemini si es administrador
-        const tools = esAdmin ? [
+        // 4. Declarar herramientas basicas y de administrador
+        const basicTools = [
+          {
+            name: "silenciar_usuario_por_desviacion",
+            description: "Silencia o bloquea al usuario actual si sus mensajes o notas de voz se desvían de forma insistente o vulgar del propósito comercial del bot (insultos, bromas, preguntas políticas, chistes, charla casual persistente, etc.).",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                motivo: {
+                  type: "STRING",
+                  description: "Una breve descripción de por qué se silencia al usuario (ej. 'charla casual persistente', 'lenguaje vulgar')."
+                }
+              },
+              required: ["motivo"]
+            }
+          }
+        ];
+
+        const tools = [
           {
             functionDeclarations: [
-              {
-                name: "actualizar_precio_producto",
-                description: "Actualiza el precio de venta de un producto en el catálogo. Usa esta función cuando el administrador indique que el precio de un producto cambió, varió o debe ser modificado.",
-                parameters: {
-                  type: "OBJECT",
-                  properties: {
-                    nombre_producto: {
-                      type: "STRING",
-                      description: "El nombre aproximado o exacto del producto a modificar (ej. 'Malla de Papas 25kg')"
+              ...basicTools,
+              ...(esAdmin ? [
+                {
+                  name: "actualizar_precio_producto",
+                  description: "Actualiza el precio de venta de un producto en el catálogo. Usa esta función cuando el administrador indique que el precio de un producto cambió, varió o debe ser modificado.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: {
+                      nombre_producto: {
+                        type: "STRING",
+                        description: "El nombre aproximado o exacto del producto a modificar (ej. 'Malla de Papas 25kg')"
+                      },
+                      nuevo_precio: {
+                        type: "INTEGER",
+                        description: "El nuevo precio de venta como número entero en pesos chilenos (sin puntos ni signos, ej. 10000)"
+                      }
                     },
-                    nuevo_precio: {
-                      type: "INTEGER",
-                      description: "El nuevo precio de venta como número entero en pesos chilenos (sin puntos ni signos, ej. 10000)"
-                    }
-                  },
-                  required: ["nombre_producto", "nuevo_precio"]
+                    required: ["nombre_producto", "nuevo_precio"]
+                  }
+                },
+                {
+                  name: "crear_producto",
+                  description: "Agrega un nuevo producto al catálogo de LukeDelivery. Usa esta función cuando el administrador pida registrar o agregar un nuevo producto indicando sus detalles. El bot puede preguntar por la URL de la imagen del producto, pero si no se provee, no envíes este parámetro.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: {
+                      nombre: {
+                        type: "STRING",
+                        description: "Nombre del producto (ej. 'Malla de Papas 25kg')"
+                      },
+                      formato_venta: {
+                        type: "STRING",
+                        description: "El formato de venta (ej. 'Saco 25kg', 'Bolsa 1u')"
+                      },
+                      precio: {
+                        type: "INTEGER",
+                        description: "El precio de venta al público como entero en pesos (ej. 12000)"
+                      },
+                      precio_costo: {
+                        type: "INTEGER",
+                        description: "El precio de costo del mayorista como entero en pesos (ej. 10000)"
+                      },
+                      categoria_logistica: {
+                        type: "STRING",
+                        enum: ["Pesado", "Estándar"],
+                        description: "La categoría logística. Usa 'Pesado' si pesa más de 5kg o es muy grande/voluminoso, de lo contrario usa 'Estándar'."
+                      },
+                      url_imagen_retail: {
+                        type: "STRING",
+                        description: "La URL directa de la imagen del producto (opcional). Solo suministrar si el usuario la provee explícitamente en el mensaje."
+                      }
+                    },
+                    required: ["nombre", "formato_venta", "precio", "precio_costo", "categoria_logistica"]
+                  }
+                },
+                {
+                  name: "cambiar_disponibilidad_producto",
+                  description: "Habilita o deshabilita la disponibilidad de un producto en el catálogo. Usa esta función cuando el administrador indique deshabilitar, habilitar, agotar, activar o desactivar la venta de un producto.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: {
+                      nombre_producto: {
+                        type: "STRING",
+                        description: "El nombre del producto."
+                      },
+                      disponible: {
+                        type: "BOOLEAN",
+                        description: "Establece true para marcarlo como disponible/activo para la venta, o false para marcarlo como agotado/deshabilitado/inactivo."
+                      }
+                    },
+                    required: ["nombre_producto", "disponible"]
+                  }
+                },
+                {
+                  name: "eliminar_producto",
+                  description: "Realiza un borrado lógico (desactivación) de un producto del catálogo. Usa esta función cuando el administrador pida eliminar o borrar un producto del catálogo.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: {
+                      nombre_producto: {
+                        type: "STRING",
+                        description: "El nombre del producto a eliminar."
+                      }
+                    },
+                    required: ["nombre_producto"]
+                  }
                 }
-              },
-              {
-                name: "crear_producto",
-                description: "Agrega un nuevo producto al catálogo de LukeDelivery. Usa esta función cuando el administrador pida registrar o agregar un nuevo producto indicando sus detalles. El bot puede preguntar por la URL de la imagen del producto, pero si no se provee, no envíes este parámetro.",
-                parameters: {
-                  type: "OBJECT",
-                  properties: {
-                    nombre: {
-                      type: "STRING",
-                      description: "Nombre del producto (ej. 'Malla de Papas 25kg')"
-                    },
-                    formato_venta: {
-                      type: "STRING",
-                      description: "El formato de venta (ej. 'Saco 25kg', 'Bolsa 1u')"
-                    },
-                    precio: {
-                      type: "INTEGER",
-                      description: "El precio de venta al público como entero en pesos (ej. 12000)"
-                    },
-                    precio_costo: {
-                      type: "INTEGER",
-                      description: "El precio de costo del mayorista como entero en pesos (ej. 10000)"
-                    },
-                    categoria_logistica: {
-                      type: "STRING",
-                      enum: ["Pesado", "Estándar"],
-                      description: "La categoría logística. Usa 'Pesado' si pesa más de 5kg o es muy grande/voluminoso, de lo contrario usa 'Estándar'."
-                    },
-                    url_imagen_retail: {
-                      type: "STRING",
-                      description: "La URL directa de la imagen del producto (opcional). Solo suministrar si el usuario la provee explícitamente en el mensaje."
-                    }
-                  },
-                  required: ["nombre", "formato_venta", "precio", "precio_costo", "categoria_logistica"]
-                }
-              },
-              {
-                name: "cambiar_disponibilidad_producto",
-                description: "Habilita o deshabilita la disponibilidad de un producto en el catálogo. Usa esta función cuando el administrador indique deshabilitar, habilitar, agotar, activar o desactivar la venta de un producto.",
-                parameters: {
-                  type: "OBJECT",
-                  properties: {
-                    nombre_producto: {
-                      type: "STRING",
-                      description: "El nombre del producto."
-                    },
-                    disponible: {
-                      type: "BOOLEAN",
-                      description: "Establece true para marcarlo como disponible/activo para la venta, o false para marcarlo como agotado/deshabilitado/inactivo."
-                    }
-                  },
-                  required: ["nombre_producto", "disponible"]
-                }
-              },
-              {
-                name: "eliminar_producto",
-                description: "Realiza un borrado lógico (desactivación) de un producto del catálogo. Usa esta función cuando el administrador pida eliminar o borrar un producto del catálogo.",
-                parameters: {
-                  type: "OBJECT",
-                  properties: {
-                    nombre_producto: {
-                      type: "STRING",
-                      description: "El nombre del producto a eliminar."
-                    }
-                  },
-                  required: ["nombre_producto"]
-                }
-              }
+              ] : [])
             ]
           }
-        ] : undefined;
+        ];
 
         const parts = [];
 
@@ -275,7 +329,10 @@ ${promptSistema}
 Aquí tienes el catálogo de productos disponibles actualmente en la base de datos:
 ${catalogoTexto}
 
-Por favor, escucha la nota de voz anterior del usuario y respóndele de forma atenta, amigable y muy concisa siguiendo tus normas y el catálogo.
+Historial de conversación reciente:
+${historialTexto}
+
+Por favor, escucha la nota de voz anterior del usuario y respóndele de forma atenta, amigable y muy concisa siguiendo tus normas, el catálogo e historial. Si notas que se desvía del propósito repetidamente, utiliza la herramienta de silenciado.
 Respuesta del asistente:`
           });
         } else {
@@ -286,8 +343,11 @@ ${promptSistema}
 Aquí tienes el catálogo de productos disponibles actualmente en la base de datos:
 ${catalogoTexto}
 
+Historial de conversación reciente:
+${historialTexto}
+
 Mensaje del usuario: "${message}"
-Respuesta del asistente:`
+Respuesta del asistente (si el usuario se desvía repetidamente de las consultas comerciales o de compras de LukeDelivery, debes invocar la herramienta de silenciado):`
           });
         }
 
@@ -323,7 +383,20 @@ Respuesta del asistente:`
             console.log(`[whatsapp-incoming] Interceptada llamada a funcion: ${name} con args:`, args);
 
             try {
-              if (name === "actualizar_precio_producto") {
+              if (name === "silenciar_usuario_por_desviacion") {
+                const { motivo } = args;
+                const cincoHorasMas = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
+                
+                const { error } = await supabase
+                  .from("clientes")
+                  .update({ bot_silenciado_hasta: cincoHorasMas })
+                  .eq("whatsapp", phoneClean);
+
+                dbResult = error
+                  ? `Error al silenciar: ${error.message}`
+                  : `Éxito: El usuario ha sido silenciado en Supabase hasta ${cincoHorasMas} debido a: ${motivo}. Debes avisarle claramente al usuario en tu respuesta que debido a que sus consultas se desvían de las compras, tu sistema se pausará y no podrás responderle en las próximas 5 horas.`;
+              }
+              else if (name === "actualizar_precio_producto") {
                 const { nombre_producto, nuevo_precio } = args;
                 const { error } = await supabase
                   .from("productos")
@@ -425,6 +498,19 @@ Respuesta del asistente:`
             responseText =
               candidatePart?.text?.trim() ||
               `¡Hola! Si deseas realizar un pedido, responde con la palabra "pedido".`;
+          }
+
+          // Registrar el mensaje de respuesta en el historial de chats
+          try {
+            await supabase
+              .from("mensajes_chat")
+              .insert([{
+                whatsapp: phoneClean,
+                remitente: "asistente",
+                contenido: responseText
+              }]);
+          } catch (histErr) {
+            console.error("[whatsapp-incoming] Error guardando respuesta en historial:", histErr.message);
           }
         } catch (geminiErr) {
           console.error("[whatsapp-incoming] Error llamando a Gemini:", geminiErr.message);
