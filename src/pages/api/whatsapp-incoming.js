@@ -307,6 +307,37 @@ Normas de comportamiento:
                     },
                     required: ["nombre_producto"]
                   }
+                },
+                {
+                  name: "actualizar_detalles_producto",
+                  description: "Actualiza los detalles de un producto en el catálogo (formato de venta, imagen, categoría logística, etc.). Usa esta función cuando el administrador pida cambiar la cantidad por caja, el formato, la imagen o fotos de un producto.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: {
+                      nombre_producto: {
+                        type: "STRING",
+                        description: "El nombre aproximado o exacto del producto a modificar (ej. 'Chocman')"
+                      },
+                      nuevo_nombre: {
+                        type: "STRING",
+                        description: "El nuevo nombre para el producto (opcional)."
+                      },
+                      nuevo_formato_venta: {
+                        type: "STRING",
+                        description: "El nuevo formato de venta o unidades (opcional, ej. 'Caja 32 unidades')"
+                      },
+                      nueva_url_imagen: {
+                        type: "STRING",
+                        description: "La nueva URL de la imagen del producto (opcional)."
+                      },
+                      nueva_categoria_logistica: {
+                        type: "STRING",
+                        enum: ["Pesado", "Estándar"],
+                        description: "La nueva categoría logística (opcional)."
+                      }
+                    },
+                    required: ["nombre_producto"]
+                  }
                 }
               ] : [])
             ]
@@ -480,6 +511,28 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
                 dbResult = error
                   ? `Error al eliminar: ${error.message}`
                   : `Éxito: El producto que coincide con "${nombre_producto}" ha sido desactivado del catálogo con éxito.`;
+              }
+              else if (name === "actualizar_detalles_producto") {
+                const { nombre_producto, nuevo_nombre, nuevo_formato_venta, nueva_url_imagen, nueva_categoria_logistica } = args;
+                
+                const updates = {};
+                if (nuevo_nombre !== undefined) updates.nombre = nuevo_nombre;
+                if (nuevo_formato_venta !== undefined) updates.formato_venta = nuevo_formato_venta;
+                if (nueva_url_imagen !== undefined) updates.url_imagen_retail = nueva_url_imagen;
+                if (nueva_categoria_logistica !== undefined) updates.categoria_logistica = nueva_categoria_logistica;
+
+                if (Object.keys(updates).length === 0) {
+                  dbResult = "Error: No se especificaron campos válidos para actualizar.";
+                } else {
+                  const { error } = await supabase
+                    .from("productos")
+                    .update(updates)
+                    .ilike("nombre", `%${nombre_producto}%`);
+
+                  dbResult = error
+                    ? `Error al actualizar detalles: ${error.message}`
+                    : `Éxito: Los detalles del producto que coincide con "${nombre_producto}" se han actualizado correctamente en Supabase. Campos modificados: ${Object.keys(updates).join(", ")}.`;
+                }
               }
             } catch (dbErr) {
               console.error("[whatsapp-incoming] Error en ejecución de DB para functionCall:", dbErr.message);
