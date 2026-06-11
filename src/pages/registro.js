@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 import { Atkinson_Hyperlegible_Next } from "next/font/google";
@@ -31,6 +31,31 @@ export default function RegistroPage() {
   const [nombreTienda, setNombreTienda] = useState("");
   const [nombreContacto, setNombreContacto] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [whatsappLid, setWhatsappLid] = useState("");
+
+  // Cargar teléfono o LID del query string
+  useEffect(() => {
+    if (router.query && router.query.phone) {
+      const phoneVal = router.query.phone.toString().trim();
+      const cleanVal = phoneVal.replace(/[^0-9]/g, "");
+      
+      // Si parece un LID de WhatsApp (longitud mayor a 11 o no empieza con 569/9)
+      const isLid = cleanVal.length > 11 || (!cleanVal.startsWith("569") && !cleanVal.startsWith("9"));
+      
+      if (isLid) {
+        setWhatsappLid(cleanVal);
+      } else {
+        let formatted = cleanVal;
+        if (formatted.startsWith("9") && formatted.length === 9) {
+          formatted = "+56" + formatted;
+        } else if (formatted.startsWith("569") && formatted.length === 11) {
+          formatted = "+" + formatted;
+        }
+        setWhatsapp(formatted);
+      }
+    }
+  }, [router.query]);
+
   const [sector, setSector] = useState("Placilla Oriente");
   const [tipoNegocio, setTipoNegocio] = useState("Almacén");
 
@@ -140,6 +165,7 @@ export default function RegistroPage() {
           nombre_tienda: nombreTienda.trim(),
           nombre_contacto: nombreContacto.trim(),
           whatsapp: formattedWhatsapp,
+          whatsapp_lid: whatsappLid || null,
           sector: sector,
           notas_campo: "Cliente auto-registrado en terreno (QR Volante)",
           latitud: latitud,

@@ -8,7 +8,7 @@ export default async function handler(req, res) {
       .json({ success: false, message: `Método ${req.method} no permitido` });
   }
 
-  const { phone, jid, message } = req.body;
+  const { phone, jid, message, senderPn } = req.body;
 
   if (!phone || !message) {
     return res
@@ -16,20 +16,34 @@ export default async function handler(req, res) {
       .json({ success: false, message: "Campos 'phone' y 'message' son requeridos." });
   }
 
-  console.log(`[whatsapp-incoming] Mensaje de ${phone} (JID: ${jid}): "${message}"`);
+  console.log(`[whatsapp-incoming] Mensaje de ${phone} (JID: ${jid}, senderPn: ${senderPn}): "${message}"`);
 
-  // Sanitizar teléfono para búsqueda en Supabase
-  const phoneClean = phone.replace(/\+/g, "").trim();
+  // Preferir senderPn si está disponible, sino usar phone
+  let searchPhone = phone;
+  if (senderPn && typeof senderPn === 'string') {
+    searchPhone = senderPn.split('@')[0].split(':')[0];
+  }
+
+  const phoneClean = searchPhone.replace(/\+/g, "").trim();
   const phoneWithPlus = "+" + phoneClean;
+
+  // Si el remitente viene con @lid, guardamos el LID limpio (que es el "phone" original)
+  const isLid = jid && jid.endsWith('@lid');
+  const lidClean = isLid ? phone.trim() : null;
 
   try {
     const supabase = createAdminClient();
 
-    // 1. Buscar si el cliente existe
+    // 1. Buscar si el cliente existe (buscando por whatsapp, whatsapp con + o whatsapp_lid si es LID)
+    let orConditions = `whatsapp.eq.${phoneClean},whatsapp.eq.${phoneWithPlus}`;
+    if (lidClean) {
+      orConditions += `,whatsapp_lid.eq.${lidClean}`;
+    }
+
     const { data: clientes, error: clientError } = await supabase
       .from("clientes")
-      .select("id, nombre_contacto, nombre_tienda, whatsapp")
-      .or(`whatsapp.eq.${phoneClean},whatsapp.eq.${phoneWithPlus}`);
+      .select("id, nombre_contacto, nombre_tienda, whatsapp, whatsapp_lid")
+      .or(orConditions);
 
     if (clientError) {
       console.error("[whatsapp-incoming] Error buscando cliente:", clientError.message);
@@ -66,8 +80,9 @@ export default async function handler(req, res) {
           responseText = `¡Hola ${cliente.nombre_contacto}! 👋 Abre este enlace para armar tu pedido de catálogo de ofertas de forma segura. El enlace expira en 2 horas:\n\n👉 https://lukeapp.me/pedido?token=${sesion.token}`;
         }
       } else {
-        // Invitación a registro si no existe
-        responseText = `¡Hola! Aún no estás registrado en LukeDelivery 📦. Para registrarte y ver nuestro catálogo de ofertas al costo, ingresa aquí:\n\n👉 https://lukeapp.me/registro?phone=${phoneClean}`;
+        // Invitación a registro si no existe, usando el identificador original (puede ser LID o número)
+        const rawPhoneClean = phone.replace(/\+/g, "").trim();
+        responseText = `¡Hola! Aún no estás registrado en LukeDelivery 📦. Para registrarte y ver nuestro catálogo de ofertas al costo, ingresa aquí:\n\n👉 https://lukeapp.me/registro?phone=${rawPhoneClean}`;
       }
     } else {
       // 2. No es intención directa de pedido: Consultamos a Gemini con el catálogo de productos
