@@ -10,6 +10,10 @@ const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const { exec } = require('child_process');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
@@ -179,13 +183,39 @@ app.post('/send', async (req, res) => {
     let sentMsg;
 
     if (audioBase64) {
-      // Convertir Base64 proveniente de Gemini a Buffer
-      const audioBuffer = Buffer.from(audioBase64, 'base64');
-      sentMsg = await sock.sendMessage(formattedNum, {
-        audio: audioBuffer,
-        mimetype: 'audio/mp4', // Formato compatible AAC/MP4 para notas de voz
-        ptt: true // Fuerza el indicador de micrófono azul (nota de voz nativa)
-      });
+      const pcmBuffer = Buffer.from(audioBase64, 'base64');
+      const tempId = crypto.randomBytes(16).toString('hex');
+      const tempPcmPath = path.join(__dirname, `temp_${tempId}.pcm`);
+      const tempOggPath = path.join(__dirname, `temp_${tempId}.ogg`);
+      
+      try {
+        fs.writeFileSync(tempPcmPath, pcmBuffer);
+        
+        await new Promise((resolve, reject) => {
+          exec(`ffmpeg -y -f s16le -ar 24000 -ac 1 -i "${tempPcmPath}" -c:a libopus -b:a 64k "${tempOggPath}"`, (err, stdout, stderr) => {
+            if (err) {
+              console.error('[wa-bridge] Error de ffmpeg:', stderr);
+              return reject(err);
+            }
+            resolve();
+          });
+        });
+        
+        const oggBuffer = fs.readFileSync(tempOggPath);
+        
+        sentMsg = await sock.sendMessage(formattedNum, {
+          audio: oggBuffer,
+          mimetype: 'audio/ogg; codecs=opus',
+          ptt: true
+        });
+      } finally {
+        try {
+          if (fs.existsSync(tempPcmPath)) fs.unlinkSync(tempPcmPath);
+          if (fs.existsSync(tempOggPath)) fs.unlinkSync(tempOggPath);
+        } catch (cleanupErr) {
+          console.error('[wa-bridge] Error limpiando archivos temporales:', cleanupErr.message);
+        }
+      }
     } else {
       if (!text) {
         return res.status(400).json({ success: false, message: 'Falta texto para enviar' });
