@@ -189,7 +189,7 @@ Normas de comportamiento:
               },
               {
                 name: "crear_producto",
-                description: "Agrega un nuevo producto al catálogo de LukeDelivery. Usa esta función cuando el administrador pida registrar o agregar un nuevo producto indicando sus detalles.",
+                description: "Agrega un nuevo producto al catálogo de LukeDelivery. Usa esta función cuando el administrador pida registrar o agregar un nuevo producto indicando sus detalles. El bot puede preguntar por la URL de la imagen del producto, pero si no se provee, no envíes este parámetro.",
                 parameters: {
                   type: "OBJECT",
                   properties: {
@@ -213,6 +213,10 @@ Normas de comportamiento:
                       type: "STRING",
                       enum: ["Pesado", "Estándar"],
                       description: "La categoría logística. Usa 'Pesado' si pesa más de 5kg o es muy grande/voluminoso, de lo contrario usa 'Estándar'."
+                    },
+                    url_imagen_retail: {
+                      type: "STRING",
+                      description: "La URL directa de la imagen del producto (opcional). Solo suministrar si el usuario la provee explícitamente en el mensaje."
                     }
                   },
                   required: ["nombre", "formato_venta", "precio", "precio_costo", "categoria_logistica"]
@@ -331,7 +335,11 @@ Respuesta del asistente:`
                   : `Éxito: El precio del producto que coincide con "${nombre_producto}" ha sido actualizado a $${nuevo_precio.toLocaleString("es-CL")} con éxito.`;
               } 
               else if (name === "crear_producto") {
-                const { nombre, formato_venta, precio, precio_costo, categoria_logistica } = args;
+                const { nombre, formato_venta, precio, precio_costo, categoria_logistica, url_imagen_retail } = args;
+                const finalImgUrl = url_imagen_retail && url_imagen_retail.trim()
+                  ? url_imagen_retail.trim()
+                  : "https://cdn.pesco.cl/wp-content/uploads/2021/03/producto_sin_imagen.png";
+
                 const { error } = await supabase
                   .from("productos")
                   .insert([{
@@ -340,13 +348,14 @@ Respuesta del asistente:`
                     precio,
                     precio_costo,
                     categoria_logistica,
+                    url_imagen_retail: finalImgUrl,
                     disponible: true,
                     activo: true
                   }]);
 
                 dbResult = error
                   ? `Error al crear: ${error.message}`
-                  : `Éxito: El producto "${nombre}" (${formato_venta}) ha sido agregado al catálogo con un precio de venta de $${precio.toLocaleString("es-CL")} y costo de $${precio_costo.toLocaleString("es-CL")}.`;
+                  : `Éxito: El producto "${nombre}" (${formato_venta}) ha sido agregado al catálogo con un precio de venta de $${precio.toLocaleString("es-CL")} y costo de $${precio_costo.toLocaleString("es-CL")}. ${!url_imagen_retail ? "Se ha asignado una imagen por defecto, recuerda que el usuario puede proporcionar una URL para actualizarla." : ""}`;
               }
               else if (name === "cambiar_disponibilidad_producto") {
                 const { nombre_producto, disponible } = args;
