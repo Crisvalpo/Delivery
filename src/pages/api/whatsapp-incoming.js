@@ -616,7 +616,7 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
                       responseModalities: ["AUDIO"],
                       speechConfig: {
                         voiceConfig: {
-                          prebuiltVoiceConfig: { voiceName: "Aoede" }
+                          prebuiltVoiceConfig: { voiceName: "Charon" }
                         }
                       }
                     }
