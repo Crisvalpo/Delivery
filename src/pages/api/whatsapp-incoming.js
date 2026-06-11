@@ -176,6 +176,17 @@ Normas de comportamiento:
           }
         }
 
+        const margenConfig = dbConfigs ? dbConfigs.find(c => c.clave === "margen_ganancia") : null;
+        const margenPercent = margenConfig ? margenConfig.valor : "20";
+
+        promptSistema += `
+
+Reglas de Negocio Críticas (No negociables):
+1. El margen de ganancia actual para calcular los precios de venta a partir del precio de costo es del ${margenPercent}%.
+2. Si eres un administrador (esAdmin = true) y pides agregar un producto al catálogo dando únicamente el precio de costo, NO preguntes por el precio de venta. Llama inmediatamente a la función "crear_producto" omitiendo el parámetro "precio" (el sistema calculará automáticamente el precio de venta agregando el ${margenPercent}% de margen).
+3. Si el administrador proporciona explícitamente tanto el precio de costo como el precio de venta, llama a "crear_producto" pasando ambos parámetros.
+`;
+
         // 2. Consultar historial de chats (últimos 15 mensajes)
         const { data: historial } = await supabase
           .from("mensajes_chat")
