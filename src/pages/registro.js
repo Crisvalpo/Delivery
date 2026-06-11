@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
+import Link from "next/link";
 import { Atkinson_Hyperlegible_Next } from "next/font/google";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -194,7 +195,7 @@ export default function RegistroPage() {
   };
 
   return (
-    <div className={`min-h-screen bg-bg-app flex flex-col justify-center px-4 py-8 ${atkinson.className}`}>
+    <div className={`min-h-screen bg-slate-100 flex flex-col items-center justify-start py-8 ${atkinson.className}`}>
       <Head>
         <title>Registrar mi Almacén | LukeDelivery</title>
         <meta
@@ -203,239 +204,231 @@ export default function RegistroPage() {
         />
         <meta
           name="description"
-          content="Regístrate en LukeDelivery B2B para acceder al catálogo al costo real."
+          content="Regístrate en LukeDelivery B2B para acceder al catálogo de ofertas al costo real."
         />
       </Head>
 
-      <div className="max-w-md w-full mx-auto bg-bg-surface border-2 border-border rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-        {/* Decoración superior */}
-        <div className="absolute right-0 top-0 h-20 w-20 bg-brand/5 blur-2xl rounded-full" />
-        
-        {/* LOGO / CABECERA */}
-        <div className="text-center mb-6">
-          <div className="mx-auto bg-brand/15 text-brand p-3 rounded-2xl w-fit mb-3">
-            <Store className="h-6 w-6" />
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl flex flex-col justify-between relative overflow-hidden border border-slate-100">
+        {/* CABECERA CURVA NARANJA (Inspirada en el Screenshot) */}
+        <div className="relative bg-gradient-to-br from-orange-500 to-amber-600 pt-12 pb-14 px-6 rounded-bl-[80px] md:rounded-bl-[100px] shadow-lg flex flex-col items-center justify-center">
+          {/* Logo circular blanco */}
+          <div className="bg-white p-4 rounded-full shadow-md flex items-center justify-center mb-4 border-4 border-orange-100">
+            <Store className="h-8 w-8 text-orange-500" />
           </div>
-          <h1 className="text-2xl font-black text-text-primary tracking-tight">
-            Regístrate en LukeDelivery
+          
+          <h1 className="text-3xl font-extrabold text-white tracking-tight">
+            Registrarse
           </h1>
-          <p className="text-sm text-text-secondary mt-2 leading-relaxed font-medium">
-            Precios costo real de los proveedores más un flete transparente.
-            Activa tu catálogo en segundos.
+          <p className="text-orange-100 text-xs text-center mt-2 leading-relaxed max-w-[280px] font-medium">
+            Accede al catálogo de ofertas al costo real para tu negocio en Placilla y Curauma.
           </p>
         </div>
 
-        {/* ESTADO DE ÉXITO */}
-        {success ? (
-          <div className="text-center py-10 space-y-4 animate-fade-in">
-            <div className="mx-auto bg-brand/15 text-brand p-4 rounded-full w-fit animate-bounce">
-              <Check className="h-8 w-8" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-text-primary">
-                ¡Registro Completado!
-              </h2>
-              <p className="text-sm text-text-secondary mt-1 font-medium">
-                Creando tu catálogo personalizado... Redirigiéndote.
-              </p>
-            </div>
-            <Loader2 className="h-6 w-6 animate-spin text-brand mx-auto mt-2" />
-          </div>
-        ) : (
-          /* FORMULARIO */
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Error message */}
-            {error && (
-              <div className="bg-error-bg/10 border-2 border-error text-white text-sm font-semibold p-4 rounded-2xl flex gap-3 items-start animate-shake">
-                <AlertCircle className="h-5 w-5 text-error shrink-0 mt-0.5" />
-                <span>{error}</span>
+        {/* CONTENIDO PRINCIPAL */}
+        <div className="flex-1 px-6 py-8">
+          {success ? (
+            <div className="text-center py-16 space-y-4 animate-fade-in flex flex-col items-center justify-center">
+              <div className="bg-emerald-50 text-emerald-500 p-5 rounded-full shadow-inner animate-bounce border border-emerald-100">
+                <Check className="h-10 w-10" />
               </div>
-            )}
-
-            {/* Nombre Tienda */}
-            <div>
-              <label className="block text-base font-bold text-text-primary mb-2">
-                Nombre de la Tienda / Almacén *
-              </label>
-              <div className="relative">
-                <Store className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-secondary" />
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej: Almacén Don Tito"
-                  value={nombreTienda}
-                  onChange={(e) => setNombreTienda(e.target.value)}
-                  className="w-full bg-bg-surface-2 border-2 border-border focus:border-brand rounded-2xl py-3.5 pl-12 pr-4 text-base font-medium text-text-primary placeholder:text-text-secondary transition-colors outline-none"
-                />
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">
+                  ¡Registro Completado!
+                </h2>
+                <p className="text-sm text-slate-500 mt-1 font-medium">
+                  Creando tu catálogo personalizado... Redirigiéndote.
+                </p>
               </div>
+              <Loader2 className="h-6 w-6 animate-spin text-orange-500 mt-4" />
             </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Error message */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm font-semibold p-4 rounded-2xl flex gap-3 items-start animate-shake">
+                  <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
 
-            {/* Nombre Contacto */}
-            <div>
-              <label className="block text-base font-bold text-text-primary mb-2">
-                Nombre del Dueño o Contacto *
-              </label>
-              <div className="relative">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-secondary" />
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej: Héctor Gómez"
-                  value={nombreContacto}
-                  onChange={(e) => setNombreContacto(e.target.value)}
-                  className="w-full bg-bg-surface-2 border-2 border-border focus:border-brand rounded-2xl py-3.5 pl-12 pr-4 text-base font-medium text-text-primary placeholder:text-text-secondary transition-colors outline-none"
-                />
-              </div>
-            </div>
-
-            {/* WhatsApp */}
-            <div>
-              <label className="block text-base font-bold text-text-primary mb-2">
-                Número de WhatsApp *
-              </label>
-              <div className="relative">
-                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-secondary" />
-                <input
-                  type="tel"
-                  required
-                  placeholder="Ej: +56912345678"
-                  value={whatsapp}
-                  onChange={(e) => setWhatsapp(e.target.value)}
-                  className="w-full bg-bg-surface-2 border-2 border-border focus:border-brand rounded-2xl py-3.5 pl-12 pr-4 text-base font-medium text-text-primary placeholder:text-text-secondary transition-colors outline-none"
-                />
-              </div>
-            </div>
-
-             {/* Sector */}
-            <div>
-              <label className="block text-base font-bold text-text-primary mb-2">
-                Sector / Barrio *
-              </label>
-              <div className="relative">
-                <select
-                  value={sector}
-                  onChange={(e) => setSector(e.target.value)}
-                  className="w-full appearance-none bg-bg-surface-2 border-2 border-border focus:border-brand rounded-2xl py-3.5 px-4 pr-12 text-base font-bold text-text-primary transition-colors outline-none cursor-pointer"
-                >
-                  {sectores.map((sec) => (
-                    <option key={sec} value={sec} className="bg-bg-surface text-text-primary text-base font-medium">
-                      {sec}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
-                  <ChevronDown className="h-5 w-5 text-text-secondary" />
+              {/* Nombre Tienda */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider pl-1">
+                  Nombre de la Tienda / Almacén *
+                </label>
+                <div className="relative flex items-center bg-white border border-slate-200 shadow-sm shadow-slate-100 rounded-full px-4 focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-500 transition-all">
+                  <Store className="h-4 w-4 text-slate-400 shrink-0" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: Almacén Don Tito"
+                    value={nombreTienda}
+                    onChange={(e) => setNombreTienda(e.target.value)}
+                    className="w-full bg-transparent border-0 outline-none text-slate-800 placeholder-slate-400 text-sm font-semibold py-3 px-3"
+                  />
                 </div>
               </div>
-            </div>
 
-            {/* Tipo de Negocio */}
-            <div>
-              <label className="block text-base font-bold text-text-primary mb-2">
-                Tipo de Negocio / Giro *
-              </label>
-              <div className="relative">
-                <select
-                  value={tipoNegocio}
-                  onChange={(e) => setTipoNegocio(e.target.value)}
-                  className="w-full appearance-none bg-bg-surface-2 border-2 border-border focus:border-brand rounded-2xl py-3.5 px-4 pr-12 text-base font-bold text-text-primary transition-colors outline-none cursor-pointer"
-                >
-                  {tiposNegocio.map((t) => (
-                    <option key={t} value={t} className="bg-bg-surface text-text-primary text-base font-medium">
-                      {t}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
-                  <ChevronDown className="h-5 w-5 text-text-secondary" />
+              {/* Nombre Contacto */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider pl-1">
+                  Nombre del Dueño o Contacto *
+                </label>
+                <div className="relative flex items-center bg-white border border-slate-200 shadow-sm shadow-slate-100 rounded-full px-4 focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-500 transition-all">
+                  <User className="h-4 w-4 text-slate-400 shrink-0" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: Héctor Gómez"
+                    value={nombreContacto}
+                    onChange={(e) => setNombreContacto(e.target.value)}
+                    className="w-full bg-transparent border-0 outline-none text-slate-800 placeholder-slate-400 text-sm font-semibold py-3 px-3"
+                  />
                 </div>
               </div>
-            </div>
 
-            {/* GEOLOCALIZACIÓN GPS */}
-            <div className="bg-bg-surface-2 border-2 border-border rounded-2xl p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex-1">
-                  <h3 className="text-sm font-extrabold text-text-primary flex items-center gap-1.5">
-                    <MapPin className="h-4.5 w-4.5 text-brand" /> Ubicación del Local *
-                  </h3>
-                  <p className="text-xs text-text-secondary leading-relaxed mt-1 font-medium">
-                    Es obligatorio geolocalizar tu almacén para verificar que te encuentras en Placilla/Curauma.
-                  </p>
+              {/* WhatsApp */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider pl-1">
+                  Número de WhatsApp *
+                </label>
+                <div className="relative flex items-center bg-white border border-slate-200 shadow-sm shadow-slate-100 rounded-full px-4 focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-500 transition-all">
+                  <Phone className="h-4 w-4 text-slate-400 shrink-0" />
+                  <input
+                    type="tel"
+                    required
+                    placeholder="Ej: +56912345678"
+                    value={whatsapp}
+                    onChange={(e) => setWhatsapp(e.target.value)}
+                    className="w-full bg-transparent border-0 outline-none text-slate-800 placeholder-slate-400 text-sm font-semibold py-3 px-3"
+                  />
                 </div>
-                
+              </div>
+
+              {/* Sector */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider pl-1">
+                  Sector / Barrio *
+                </label>
+                <div className="relative flex items-center bg-white border border-slate-200 shadow-sm shadow-slate-100 rounded-full px-4 focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-500 transition-all">
+                  <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
+                  <select
+                    value={sector}
+                    onChange={(e) => setSector(e.target.value)}
+                    className="w-full bg-transparent border-0 outline-none text-slate-800 text-sm font-semibold py-3 px-3 appearance-none cursor-pointer"
+                  >
+                    {sectores.map((sec) => (
+                      <option key={sec} value={sec} className="text-slate-800 font-medium">
+                        {sec}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 pointer-events-none absolute right-4" />
+                </div>
+              </div>
+
+              {/* Tipo de Negocio */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider pl-1">
+                  Tipo de Negocio / Giro *
+                </label>
+                <div className="relative flex items-center bg-white border border-slate-200 shadow-sm shadow-slate-100 rounded-full px-4 focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-500 transition-all">
+                  <Store className="h-4 w-4 text-slate-400 shrink-0" />
+                  <select
+                    value={tipoNegocio}
+                    onChange={(e) => setTipoNegocio(e.target.value)}
+                    className="w-full bg-transparent border-0 outline-none text-slate-800 text-sm font-semibold py-3 px-3 appearance-none cursor-pointer"
+                  >
+                    {tiposNegocio.map((t) => (
+                      <option key={t} value={t} className="text-slate-800 font-medium">
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 pointer-events-none absolute right-4" />
+                </div>
+              </div>
+
+              {/* GEOLOCALIZACIÓN GPS (Premium card) */}
+              <div className="bg-slate-50 border border-slate-100 rounded-3xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-orange-500" />
+                  <span className="text-sm font-extrabold text-slate-700">Ubicación del Local *</span>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                  Es obligatorio geolocalizar tu almacén para validar que te encuentras en Placilla o Curauma.
+                </p>
                 <button
                   type="button"
                   onClick={obtenerGPS}
                   disabled={gpsStatus === "loading"}
-                  className={`py-3 px-4 rounded-xl font-bold text-sm transition-all cursor-pointer flex items-center gap-1.5 shrink-0 shadow-md ${
+                  className={`w-full py-3 px-4 rounded-full font-bold text-sm transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm ${
                     gpsStatus === "success"
-                      ? "bg-brand/20 text-brand border-2 border-brand"
+                      ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
                       : gpsStatus === "error"
-                      ? "bg-error/20 text-error border-2 border-error"
-                      : "bg-brand text-white hover:bg-brand-hover"
+                      ? "bg-red-50 text-red-600 border border-red-200"
+                      : "bg-orange-500 hover:bg-orange-600 text-white shadow-orange-950/20 shadow-lg hover:shadow-orange-700/30"
                   }`}
                 >
                   {gpsStatus === "loading" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Buscando GPS...</span>
+                    </>
                   ) : gpsStatus === "success" ? (
                     <>
-                      <Check className="h-4 w-4" /> Listo
+                      <Check className="h-4 w-4" />
+                      <span>Ubicación Registrada</span>
                     </>
                   ) : (
                     <>
-                      <Compass className="h-4 w-4" /> GPS
+                      <Compass className="h-4 w-4" />
+                      <span>Activar GPS</span>
                     </>
                   )}
                 </button>
+
+                {gpsStatus === "success" && (
+                  <div className="text-center text-[10px] font-mono text-slate-400 font-bold">
+                    Lat: {latitud?.toFixed(5)} | Lng: {longitud?.toFixed(5)}
+                  </div>
+                )}
               </div>
 
-              {gpsStatus === "success" && (
-                <div className="mt-3 text-xs font-bold text-brand bg-brand/10 p-2.5 rounded-lg border border-brand/20 leading-none flex justify-between">
-                  <span>Lat: {latitud?.toFixed(5)}</span>
-                  <span>Lng: {longitud?.toFixed(5)}</span>
-                </div>
-              )}
+              {/* BOTÓN REGISTRAR */}
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 active:scale-[0.98] text-white font-bold py-4 rounded-full text-base flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-orange-950/20"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                    <span>Registrando Almacén...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>REGISTRARSE</span>
+                    <ArrowRight className="h-5 w-5" />
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+        </div>
 
-              {gpsStatus === "error" && (
-                <div className="mt-3 text-xs font-semibold text-red-200 bg-error-bg/10 p-3 rounded-lg border border-error/30 leading-relaxed">
-                  ⚠️ No se pudo obtener tu GPS. Por favor, activa el GPS del dispositivo y autoriza el acceso a la ubicación en tu navegador para registrarte.
-                </div>
-              )}
-            </div>
-
-            {/* BOTÓN REGISTRAR */}
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full bg-brand hover:bg-brand-hover active:scale-[0.98] text-white font-extrabold py-4 rounded-2xl text-base flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-brand/20"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-6 w-6 animate-spin" /> Registrando...
-                </>
-              ) : (
-                <>
-                  Registrar mi Local <ArrowRight className="h-5 w-5" />
-                </>
-              )}
-            </button>
-          </form>
-        )}
-      </div>
-
-      <div className="text-center mt-6 space-y-1.5">
-        <p className="text-xs font-medium text-text-secondary">LukeDelivery B2B — Placilla & Curauma</p>
-        <p className="text-xs text-text-secondary">
-          ¿Necesitas ayuda?{" "}
-          <a
-            href="tel:+56912345678"
-            className="text-brand font-bold hover:text-brand-hover transition-colors inline-flex items-center gap-1"
-          >
-            <Phone className="h-3 w-3" />
-            Llámanos al +56 9 1234 5678
-          </a>
-        </p>
+        {/* PIE DE PÁGINA (Footer) */}
+        <div className="border-t border-slate-100 py-6 px-6 text-center space-y-2 bg-slate-50/50">
+          <p className="text-xs text-slate-500 font-medium">
+            ¿Ya tienes un local registrado?{" "}
+            <Link href="/pedido" className="text-orange-500 font-extrabold hover:underline">
+              Ir al Catálogo
+            </Link>
+          </p>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+            LukeDelivery B2B · Placilla & Curauma
+          </p>
+        </div>
       </div>
     </div>
   );
