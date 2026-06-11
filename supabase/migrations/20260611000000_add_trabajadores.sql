@@ -34,3 +34,5 @@ VALUES
 ('María Flores (Vendedor)', '56987654321', 'Vendedor', true),
 ('Juan Pérez (Repartidor)', '56955566677', 'Repartidor', true)
 ON CONFLICT (whatsapp) DO NOTHING;
+
+GRANT ALL ON TABLE public.trabajadores TO anon, authenticated, service_role;
