@@ -118,7 +118,7 @@ export default async function handler(req, res) {
       } else {
         // Invitación a registro si no existe, usando el identificador original (puede ser LID o número)
         const rawPhoneClean = phone.replace(/\+/g, "").trim();
-        responseText = `¡Hola! Aún no estás registrado en LukeDelivery 📦. Para registrarte y ver nuestro catálogo de ofertas al costo, ingresa aquí:\n\n👉 https://lukeapp.me/registro?phone=${rawPhoneClean}`;
+        responseText = `¡Hola! Aún no estás registrado en LukeDelivery 📦. Te invito a registrarte gratis y sin compromiso de compra. Al entrar, podrás ver todo nuestro catálogo de ofertas al costo para mirar tranquilo 👇\n\n👉 https://lukeapp.me/registro?phone=${rawPhoneClean}`;
       }
     } else {
       // 2. No es intención directa de pedido: Consultamos a Gemini con el catálogo de productos
@@ -186,6 +186,15 @@ Reglas de Negocio Críticas (No negociables):
 2. Si eres un administrador (esAdmin = true) y pides agregar un producto al catálogo dando únicamente el precio de costo, NO preguntes por el precio de venta. Llama inmediatamente a la función "crear_producto" omitiendo el parámetro "precio" (el sistema calculará automáticamente el precio de venta agregando el ${margenPercent}% de margen).
 3. Si el administrador proporciona explícitamente tanto el precio de costo como el precio de venta, llama a "crear_producto" pasando ambos parámetros.
 `;
+
+        if (!cliente) {
+          promptSistema += `
+4. El usuario actual NO está registrado en LukeDelivery. Si te pregunta por productos, precios, ofertas o catálogo en su nota de voz o mensaje, NO le recites la lista de productos ni le des los precios detallados del catálogo. En su lugar, invítalo muy cordialmente a registrarse usando el enlace de registro, explicándole claramente que:
+   - El registro es totalmente gratuito y sin ningún compromiso de compra.
+   - Una vez registrado y al acceder a la sección de pedidos, podrá ver todo el catálogo completo de ofertas al costo.
+   - El ingreso no implica compra obligatoria, puede mirar y cotizar con total tranquilidad.
+`;
+        }
 
         // 2. Consultar historial de chats (últimos 15 mensajes)
         const { data: historial } = await supabase
