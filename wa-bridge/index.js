@@ -70,7 +70,24 @@ async function connectToWhatsApp() {
     for (const msg of m.messages) {
       if (msg.key.fromMe) continue; // Ignorar mensajes enviados por la propia cuenta
 
-      const senderNumber = msg.key.remoteJid; // ej: 56912345678@s.whatsapp.net
+      const senderNumber = msg.key.remoteJid; // ej: 56912345678@s.whatsapp.net o LID@lid
+      
+      // Obtener el número limpio del bot (sin device ID :X ni @domain)
+      const getCleanId = (jid) => jid ? jid.split('@')[0].split(':')[0] : null;
+      
+      const mePhone = sock.user?.id ? getCleanId(sock.user.id) : null;
+      const meLid = sock.user?.lid ? getCleanId(sock.user.lid) : null;
+      const senderClean = getCleanId(senderNumber);
+
+      // Si es un mensaje de nosotros mismos (sincronizado o chat propio), ignorar
+      const isFromMe = (mePhone && senderClean === mePhone) || 
+                       (meLid && senderClean === meLid);
+
+      if (isFromMe) {
+        console.log(`[wa-bridge] Ignorando mensaje propio de ${senderNumber}`);
+        continue;
+      }
+
       const messageText = msg.message?.conversation || 
                           msg.message?.extendedTextMessage?.text || 
                           '';
@@ -79,16 +96,22 @@ async function connectToWhatsApp() {
 
       console.log(`Mensaje recibido de ${senderNumber}: "${messageText}"`);
 
+      if (senderNumber.endsWith('@lid')) {
+        console.log(`[wa-bridge] [LID DETECTADO] Estructura completa de mensaje LID:`, JSON.stringify(msg, null, 2));
+      }
+
       // Enviar webhook a n8n (ahora apunta a Next.js)
       try {
         const response = await fetch(N8N_WEBHOOK_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            phone: senderNumber.split('@')[0],
+            phone: senderClean,
             jid: senderNumber,
             message: messageText,
-            timestamp: msg.messageTimestamp
+            timestamp: msg.messageTimestamp,
+            // Enviamos información adicional por si viene el senderPn
+            senderPn: msg.key.senderPn || null
           })
         });
         console.log(`Webhook enviado a n8n, respuesta: ${response.status}`);
