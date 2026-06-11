@@ -33,18 +33,27 @@ export default function RegistroPage() {
   const [nombreContacto, setNombreContacto] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [whatsappLid, setWhatsappLid] = useState("");
+  const [isPhonePrefilled, setIsPhonePrefilled] = useState(false);
+  const [checkingRegistered, setCheckingRegistered] = useState(true);
 
-  // Cargar teléfono o LID del query string
+  // Cargar teléfono o LID del query string y validar registro previo
   useEffect(() => {
-    if (router.query && router.query.phone) {
-      const phoneVal = router.query.phone.toString().trim();
+    if (!router.isReady) return;
+
+    const checkRegistration = async (phoneVal) => {
+      setCheckingRegistered(true);
       const cleanVal = phoneVal.replace(/[^0-9]/g, "");
       
       // Si parece un LID de WhatsApp (longitud mayor a 11 o no empieza con 569/9)
       const isLid = cleanVal.length > 11 || (!cleanVal.startsWith("569") && !cleanVal.startsWith("9"));
       
+      let finalLid = null;
+      let formattedWhatsapp = null;
+
       if (isLid) {
+        finalLid = cleanVal;
         setWhatsappLid(cleanVal);
+        setIsPhonePrefilled(false); // Sigue siendo editable ya que necesitamos su celular real
       } else {
         let formatted = cleanVal;
         if (formatted.startsWith("9") && formatted.length === 9) {
@@ -52,10 +61,48 @@ export default function RegistroPage() {
         } else if (formatted.startsWith("569") && formatted.length === 11) {
           formatted = "+" + formatted;
         }
+        formattedWhatsapp = formatted;
         setWhatsapp(formatted);
+        setIsPhonePrefilled(true); // Bloqueamos edición
       }
+
+      try {
+        // Consultar Supabase si ya existe el cliente con este número o LID
+        let orConditions = "";
+        if (formattedWhatsapp) {
+          const cleanNoPlus = formattedWhatsapp.replace(/\+/g, "");
+          orConditions = `whatsapp.eq.${cleanNoPlus},whatsapp.eq.${formattedWhatsapp}`;
+        }
+        if (finalLid) {
+          if (orConditions) orConditions += ",";
+          orConditions += `whatsapp_lid.eq.${finalLid}`;
+        }
+
+        if (orConditions) {
+          const { data: clientes, error: clientError } = await supabase
+            .from("clientes")
+            .select("id")
+            .or(orConditions);
+
+          if (!clientError && clientes && clientes.length > 0) {
+            console.log("[Registro] Cliente ya existe. Redirigiendo al catálogo...", clientes[0].id);
+            router.push(`/pedido?cliente_id=${clientes[0].id}`);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("[Registro] Error validando registro previo:", err);
+      } finally {
+        setCheckingRegistered(false);
+      }
+    };
+
+    if (router.query && router.query.phone) {
+      checkRegistration(router.query.phone.toString().trim());
+    } else {
+      setCheckingRegistered(false);
     }
-  }, [router.query]);
+  }, [router.query, router.isReady]);
 
   const [sector, setSector] = useState("Placilla Oriente");
   const [tipoNegocio, setTipoNegocio] = useState("Almacén");
@@ -194,6 +241,30 @@ export default function RegistroPage() {
     }
   };
 
+  if (checkingRegistered) {
+    return (
+      <div className={`min-h-screen bg-slate-100 flex flex-col items-center justify-center py-8 ${atkinson.className}`}>
+        <Head>
+          <title>Verificando cuenta | LukeDelivery</title>
+        </Head>
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl flex flex-col items-center justify-center p-12 border border-slate-100 text-center space-y-6">
+          <div className="bg-orange-50 p-6 rounded-full shadow-inner animate-pulse border border-orange-100">
+            <Store className="h-12 w-12 text-orange-500" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-slate-800 animate-pulse">
+              Verificando tu Cuenta
+            </h2>
+            <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-[280px]">
+              Comprobando si tu número de WhatsApp ya se encuentra registrado...
+            </p>
+          </div>
+          <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen bg-slate-100 flex flex-col items-center justify-start py-8 ${atkinson.className}`}>
       <Head>
@@ -292,7 +363,7 @@ export default function RegistroPage() {
                 <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider pl-1">
                   Número de WhatsApp *
                 </label>
-                <div className="relative flex items-center bg-white border border-slate-200 shadow-sm shadow-slate-100 rounded-full px-4 focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-500 transition-all">
+                <div className={`relative flex items-center border shadow-sm shadow-slate-100 rounded-full px-4 transition-all ${isPhonePrefilled ? 'bg-slate-50 border-slate-200' : 'bg-white border-slate-200 focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-500'}`}>
                   <Phone className="h-4 w-4 text-slate-400 shrink-0" />
                   <input
                     type="tel"
@@ -300,9 +371,15 @@ export default function RegistroPage() {
                     placeholder="Ej: +56912345678"
                     value={whatsapp}
                     onChange={(e) => setWhatsapp(e.target.value)}
-                    className="w-full bg-transparent border-0 outline-none text-slate-800 placeholder-slate-400 text-sm font-semibold py-3 px-3"
+                    readOnly={isPhonePrefilled}
+                    className={`w-full bg-transparent border-0 outline-none placeholder-slate-400 text-sm font-semibold py-3 px-3 ${isPhonePrefilled ? 'text-slate-500 cursor-not-allowed' : 'text-slate-800'}`}
                   />
                 </div>
+                {isPhonePrefilled && (
+                  <p className="text-[10px] text-slate-400 font-semibold pl-2">
+                    Tu número de WhatsApp se ha cargado automáticamente y no es editable para garantizar la entrega.
+                  </p>
+                )}
               </div>
 
               {/* Sector */}
