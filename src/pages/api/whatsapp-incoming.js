@@ -98,6 +98,7 @@ export default async function handler(req, res) {
       msgLower.includes("oferta");
 
     let responseText = "";
+    let audioBase64ParaEnviar = null;
 
     if (esIntencionPedido) {
       if (cliente) {
@@ -367,7 +368,7 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
           };
         }
 
-        let audioBase64ParaEnviar = null;
+        audioBase64ParaEnviar = null;
 
         try {
           console.log(`[whatsapp-incoming] Llamando a Gemini (${tieneAudioEntrante ? 'Audio' : 'Texto'}) con modelo: ${modelName}, temp: ${temperature}. Admin: ${esAdmin}`);
