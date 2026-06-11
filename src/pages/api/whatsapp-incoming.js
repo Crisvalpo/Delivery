@@ -351,8 +351,26 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
           });
         }
 
+        const generationConfig = {
+          temperature: temperature,
+        };
+
+        const tieneAudioEntrante = !!(audio && audio.data);
+        if (tieneAudioEntrante) {
+          generationConfig.responseMimeType = "audio/mp3";
+          generationConfig.speechConfig = {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: "Aoede" // Opciones: Puck, Charon, Kore, Fenrir, Aoede
+              }
+            }
+          };
+        }
+
+        let audioBase64ParaEnviar = null;
+
         try {
-          console.log(`[whatsapp-incoming] Llamando a Gemini (${audio ? 'Audio' : 'Texto'}) con modelo: ${modelName}, temp: ${temperature}. Admin: ${esAdmin}`);
+          console.log(`[whatsapp-incoming] Llamando a Gemini (${tieneAudioEntrante ? 'Audio' : 'Texto'}) con modelo: ${modelName}, temp: ${temperature}. Admin: ${esAdmin}`);
           const geminiRes = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`,
             {
@@ -363,9 +381,7 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
               body: JSON.stringify({
                 contents: [{ parts: parts }],
                 tools: tools,
-                generationConfig: {
-                  temperature: temperature,
-                }
+                generationConfig: generationConfig
               }),
             }
           );
@@ -376,6 +392,7 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
 
           const geminiData = await geminiRes.json();
           const candidatePart = geminiData.candidates?.[0]?.content?.parts?.[0];
+          const candidateParts = geminiData.candidates?.[0]?.content?.parts || [];
 
           if (candidatePart?.functionCall) {
             const { name, args } = candidatePart.functionCall;
@@ -475,9 +492,7 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
                       { role: "function", parts: [{ functionResponse: { name: name, response: { result: dbResult } } }] }
                     ],
                     tools: tools,
-                    generationConfig: {
-                      temperature: temperature,
-                    }
+                    generationConfig: generationConfig
                   }),
                 }
               );
@@ -487,17 +502,38 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
               }
 
               const finalData = await finalRes.json();
-              responseText =
-                finalData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
-                `Operación realizada en el catálogo. Detalle: ${dbResult}`;
+              const finalParts = finalData.candidates?.[0]?.content?.parts || [];
+              let finalResponseText = "";
+              for (const part of finalParts) {
+                if (part.inlineData && part.inlineData.mimeType.startsWith('audio/')) {
+                  audioBase64ParaEnviar = part.inlineData.data;
+                } else if (part.text) {
+                  finalResponseText += part.text + " ";
+                }
+              }
+              responseText = finalResponseText.trim();
+              if (!responseText && audioBase64ParaEnviar) {
+                responseText = `[Nota de voz generada por el Bot: Operación realizada en el catálogo. Detalle: ${dbResult}]`;
+              }
             } catch (finalErr) {
               console.error("[whatsapp-incoming] Error en segunda llamada a Gemini:", finalErr.message);
               responseText = `Operación completada en el catálogo. Detalle: ${dbResult}`;
             }
           } else {
-            responseText =
-              candidatePart?.text?.trim() ||
-              `¡Hola! Si deseas realizar un pedido, responde con la palabra "pedido".`;
+            let extractedText = "";
+            for (const part of candidateParts) {
+              if (part.inlineData && part.inlineData.mimeType.startsWith('audio/')) {
+                audioBase64ParaEnviar = part.inlineData.data;
+              } else if (part.text) {
+                extractedText += part.text + " ";
+              }
+            }
+            responseText = extractedText.trim();
+            if (!responseText && audioBase64ParaEnviar) {
+              responseText = "[Nota de voz generada por el Bot]";
+            } else if (!responseText && !audioBase64ParaEnviar) {
+              responseText = `¡Hola! Si deseas realizar un pedido, responde con la palabra "pedido".`;
+            }
           }
 
           // Registrar el mensaje de respuesta en el historial de chats
@@ -521,7 +557,7 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
 
     // 3. Enviar el mensaje de vuelta al cliente usando el JID completo (mismo chat de origen)
     const destinatario = jid || `${phoneClean}@s.whatsapp.net`;
-    console.log(`[whatsapp-incoming] Enviando respuesta a ${destinatario}`);
+    console.log(`[whatsapp-incoming] Enviando respuesta a ${destinatario} (${audioBase64ParaEnviar ? 'Nota de voz' : 'Texto'})`);
 
     const sendRes = await fetch("http://localhost:3015/send", {
       method: "POST",
@@ -530,7 +566,8 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
       },
       body: JSON.stringify({
         to: destinatario,
-        text: responseText,
+        text: audioBase64ParaEnviar ? "" : responseText,
+        audioBase64: audioBase64ParaEnviar
       }),
     });
 

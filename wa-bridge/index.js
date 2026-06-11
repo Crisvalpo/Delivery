@@ -163,10 +163,10 @@ app.get('/status', (req, res) => {
 
 // Enviar mensaje
 app.post('/send', async (req, res) => {
-  const { to, text } = req.body;
+  const { to, text, audioBase64 } = req.body;
   
-  if (!to || !text) {
-    return res.status(400).json({ success: false, message: 'Falta to o text' });
+  if (!to) {
+    return res.status(400).json({ success: false, message: 'Falta destinatario (to)' });
   }
 
   if (connectionState !== 'connected' || !sock) {
@@ -175,10 +175,26 @@ app.post('/send', async (req, res) => {
 
   try {
     const formattedNum = to.includes('@') ? to : `${to.replace(/[^0-9]/g, '')}@s.whatsapp.net`;
-    const sentMsg = await sock.sendMessage(formattedNum, { text: text });
-    res.json({ success: true, message: 'Mensaje enviado', data: sentMsg });
+    let sentMsg;
+
+    if (audioBase64) {
+      // Convertir Base64 proveniente de Gemini a Buffer
+      const audioBuffer = Buffer.from(audioBase64, 'base64');
+      sentMsg = await sock.sendMessage(formattedNum, {
+        audio: audioBuffer,
+        mimetype: 'audio/mp4', // Formato compatible AAC/MP4 para notas de voz
+        ptt: true // Fuerza el indicador de micrófono azul (nota de voz nativa)
+      });
+    } else {
+      if (!text) {
+        return res.status(400).json({ success: false, message: 'Falta texto para enviar' });
+      }
+      sentMsg = await sock.sendMessage(formattedNum, { text: text });
+    }
+    
+    res.json({ success: true, message: 'Mensaje enviado con éxito', data: sentMsg });
   } catch (err) {
-    console.error('Error enviando mensaje:', err);
+    console.error('Error al enviar en wa-bridge:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
