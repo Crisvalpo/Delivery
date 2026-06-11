@@ -257,7 +257,7 @@ Normas de comportamiento:
                       },
                       precio: {
                         type: "INTEGER",
-                        description: "El precio de venta al público como entero en pesos (ej. 12000)"
+                        description: "El precio de venta al público como entero en pesos (opcional). Solo suministrar si el usuario lo indica explícitamente en el mensaje. Si no se indica, no lo envíes."
                       },
                       precio_costo: {
                         type: "INTEGER",
@@ -273,7 +273,7 @@ Normas de comportamiento:
                         description: "La URL directa de la imagen del producto (opcional). Solo suministrar si el usuario la provee explícitamente en el mensaje."
                       }
                     },
-                    required: ["nombre", "formato_venta", "precio", "precio_costo", "categoria_logistica"]
+                    required: ["nombre", "formato_venta", "precio_costo", "categoria_logistica"]
                   }
                 },
                 {
@@ -427,6 +427,17 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
               } 
               else if (name === "crear_producto") {
                 const { nombre, formato_venta, precio, precio_costo, categoria_logistica, url_imagen_retail } = args;
+                
+                let precioVentaFinal = precio;
+                let margenAplicado = null;
+
+                if (!precioVentaFinal) {
+                  const margenConfig = dbConfigs ? dbConfigs.find(c => c.clave === "margen_ganancia") : null;
+                  const margenPercent = margenConfig ? parseFloat(margenConfig.valor) : 20; // 20% default
+                  margenAplicado = margenPercent;
+                  precioVentaFinal = Math.round(precio_costo * (1 + margenPercent / 100));
+                }
+
                 const finalImgUrl = url_imagen_retail && url_imagen_retail.trim()
                   ? url_imagen_retail.trim()
                   : "https://cdn.pesco.cl/wp-content/uploads/2021/03/producto_sin_imagen.png";
@@ -436,7 +447,7 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
                   .insert([{
                     nombre,
                     formato_venta,
-                    precio,
+                    precio: precioVentaFinal,
                     precio_costo,
                     categoria_logistica,
                     url_imagen_retail: finalImgUrl,
@@ -446,7 +457,7 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
 
                 dbResult = error
                   ? `Error al crear: ${error.message}`
-                  : `Éxito: El producto "${nombre}" (${formato_venta}) ha sido agregado al catálogo con un precio de venta de $${precio.toLocaleString("es-CL")} y costo de $${precio_costo.toLocaleString("es-CL")}. ${!url_imagen_retail ? "Se ha asignado una imagen por defecto, recuerda que el usuario puede proporcionar una URL para actualizarla." : ""}`;
+                  : `Éxito: El producto "${nombre}" (${formato_venta}) ha sido agregado al catálogo con un precio de costo de $${precio_costo.toLocaleString("es-CL")} y precio de venta de $${precioVentaFinal.toLocaleString("es-CL")}${margenAplicado !== null ? ` (calculado automáticamente agregando un ${margenAplicado}% de margen de ganancia configurado en la app)` : ""}. ${!url_imagen_retail ? "Se ha asignado una imagen por defecto, recuerda que el usuario puede proporcionar una URL para actualizarla." : ""}`;
               }
               else if (name === "cambiar_disponibilidad_producto") {
                 const { nombre_producto, disponible } = args;

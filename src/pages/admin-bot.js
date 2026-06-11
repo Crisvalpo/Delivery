@@ -18,6 +18,7 @@ export default function AdminBotPage() {
   const [prompt, setPrompt] = useState("");
   const [modelName, setModelName] = useState("gemini-2.5-flash");
   const [temperature, setTemperature] = useState(0.2);
+  const [margenGanancia, setMargenGanancia] = useState(20);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null); // { type: 'success' | 'error', message: string }
@@ -35,12 +36,17 @@ export default function AdminBotPage() {
           const promptConfig = data.find(c => c.clave === "prompt_sistema");
           const modelConfig = data.find(c => c.clave === "model_name");
           const tempConfig = data.find(c => c.clave === "temperature");
+          const margenConfig = data.find(c => c.clave === "margen_ganancia");
 
           if (promptConfig && promptConfig.valor) setPrompt(promptConfig.valor);
           if (modelConfig && modelConfig.valor) setModelName(modelConfig.valor);
           if (tempConfig && tempConfig.valor) {
             const parsedTemp = parseFloat(tempConfig.valor);
             if (!isNaN(parsedTemp)) setTemperature(parsedTemp);
+          }
+          if (margenConfig && margenConfig.valor) {
+            const parsedMargen = parseInt(margenConfig.valor);
+            if (!isNaN(parsedMargen)) setMargenGanancia(parsedMargen);
           }
         }
       } catch (err) {
@@ -73,7 +79,8 @@ export default function AdminBotPage() {
         .upsert([
           { clave: "prompt_sistema", valor: prompt.trim() },
           { clave: "model_name", valor: modelName },
-          { clave: "temperature", valor: temperature.toString() }
+          { clave: "temperature", valor: temperature.toString() },
+          { clave: "margen_ganancia", valor: margenGanancia.toString() }
         ]);
 
       if (error) throw error;
@@ -161,8 +168,8 @@ export default function AdminBotPage() {
                     />
                   </div>
 
-                  {/* Parámetros del Modelo */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-slate-800/60">
+                  {/* Parámetros del Modelo y Negocio */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-4 border-t border-slate-800/60">
                     {/* Modelo */}
                     <div className="space-y-2">
                       <label htmlFor="modelName" className="text-xs font-semibold text-slate-300 block">
@@ -186,7 +193,7 @@ export default function AdminBotPage() {
                           Temperatura: <span className="text-emerald-400 font-mono">{temperature}</span>
                         </label>
                         <span className="text-[10px] text-slate-500 font-medium">
-                          {temperature <= 0.2 ? "Máxima Precisión" : temperature >= 0.7 ? "Más Creativo" : "Equilibrado"}
+                          {temperature <= 0.2 ? "Preciso" : temperature >= 0.7 ? "Creativo" : "Equilibrado"}
                         </span>
                       </div>
                       <input
@@ -203,6 +210,24 @@ export default function AdminBotPage() {
                         <span>Preciso (0.0)</span>
                         <span>Creativo (1.0)</span>
                       </div>
+                    </div>
+
+                    {/* Margen de Ganancia */}
+                    <div className="space-y-2">
+                      <label htmlFor="margenGanancia" className="text-xs font-semibold text-slate-300 block">
+                        Margen de Ganancia (%)
+                      </label>
+                      <input
+                        id="margenGanancia"
+                        type="number"
+                        min="0"
+                        max="200"
+                        required
+                        value={margenGanancia}
+                        onChange={(e) => setMargenGanancia(parseInt(e.target.value) || 0)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                        placeholder="Ej: 20"
+                      />
                     </div>
                   </div>
 
