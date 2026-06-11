@@ -1,8 +1,8 @@
-const {
   default: makeWASocket,
   DisconnectReason,
   useMultiFileAuthState,
-  fetchLatestBaileysVersion
+  fetchLatestBaileysVersion,
+  downloadMediaMessage
 } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const qrcode = require('qrcode-terminal');
@@ -92,9 +92,34 @@ async function connectToWhatsApp() {
                           msg.message?.extendedTextMessage?.text || 
                           '';
 
-      if (!messageText.trim()) continue;
+      const isAudio = !!msg.message?.audioMessage;
 
-      console.log(`Mensaje recibido de ${senderNumber}: "${messageText}"`);
+      if (!messageText.trim() && !isAudio) continue;
+
+      let audioData = null;
+      if (isAudio) {
+        console.log(`[wa-bridge] Mensaje de audio recibido de ${senderNumber}. Descargando media...`);
+        try {
+          const buffer = await downloadMediaMessage(
+            msg,
+            'buffer',
+            {},
+            { 
+              logger: pino({ level: 'silent' }),
+              reuploadRequest: sock.updateMediaMessage
+            }
+          );
+          audioData = {
+            data: buffer.toString('base64'),
+            mimeType: msg.message.audioMessage.mimetype || 'audio/ogg; codecs=opus'
+          };
+          console.log(`[wa-bridge] Audio descargado y codificado en Base64 con éxito.`);
+        } catch (downloadErr) {
+          console.error('[wa-bridge] Error descargando audioMessage:', downloadErr.message);
+        }
+      } else {
+        console.log(`Mensaje recibido de ${senderNumber}: "${messageText}"`);
+      }
 
       if (senderNumber.endsWith('@lid')) {
         console.log(`[wa-bridge] [LID DETECTADO] Estructura completa de mensaje LID:`, JSON.stringify(msg, null, 2));
@@ -109,6 +134,7 @@ async function connectToWhatsApp() {
             phone: senderClean,
             jid: senderNumber,
             message: messageText,
+            audio: audioData,
             timestamp: msg.messageTimestamp,
             // Enviamos información adicional por si viene el senderPn
             senderPn: msg.key.senderPn || null

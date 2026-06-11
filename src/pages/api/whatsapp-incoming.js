@@ -8,15 +8,15 @@ export default async function handler(req, res) {
       .json({ success: false, message: `Método ${req.method} no permitido` });
   }
 
-  const { phone, jid, message, senderPn } = req.body;
+  const { phone, jid, message, audio, senderPn } = req.body;
 
-  if (!phone || !message) {
+  if (!phone || (!message && !audio)) {
     return res
       .status(400)
-      .json({ success: false, message: "Campos 'phone' y 'message' son requeridos." });
+      .json({ success: false, message: "Campos 'phone' y alguno de 'message' o 'audio' son requeridos." });
   }
 
-  console.log(`[whatsapp-incoming] Mensaje de ${phone} (JID: ${jid}, senderPn: ${senderPn}): "${message}"`);
+  console.log(`[whatsapp-incoming] Mensaje de ${phone} (JID: ${jid}, senderPn: ${senderPn}): ${audio ? '[Nota de Voz]' : `"${message}"`}`);
 
   // Preferir senderPn si está disponible, sino usar phone
   let searchPhone = phone;
@@ -155,17 +155,44 @@ Normas de comportamiento:
           }
         }
 
-        const prompt = `
+        const parts = [];
+
+        if (audio && audio.data) {
+          // Agregar la parte de audio
+          parts.push({
+            inlineData: {
+              mimeType: audio.mimeType || "audio/ogg",
+              data: audio.data
+            }
+          });
+
+          // Agregar las instrucciones correspondientes
+          parts.push({
+            text: `
+${promptSistema}
+
+Aquí tienes el catálogo de productos disponibles actualmente en la base de datos:
+${catalogoTexto}
+
+Por favor, escucha la nota de voz anterior del usuario y respóndele de forma atenta, amigable y muy concisa siguiendo tus normas y el catálogo.
+Respuesta del asistente:`
+          });
+        } else {
+          // Si es solo texto
+          parts.push({
+            text: `
 ${promptSistema}
 
 Aquí tienes el catálogo de productos disponibles actualmente en la base de datos:
 ${catalogoTexto}
 
 Mensaje del usuario: "${message}"
-Respuesta del asistente:`;
+Respuesta del asistente:`
+          });
+        }
 
         try {
-          console.log(`[whatsapp-incoming] Llamando a Gemini con modelo: ${modelName}, temp: ${temperature}`);
+          console.log(`[whatsapp-incoming] Llamando a Gemini (${audio ? 'Audio' : 'Texto'}) con modelo: ${modelName}, temp: ${temperature}`);
           const geminiRes = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`,
             {
@@ -174,7 +201,7 @@ Respuesta del asistente:`;
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
+                contents: [{ parts: parts }],
                 generationConfig: {
                   temperature: temperature,
                 }

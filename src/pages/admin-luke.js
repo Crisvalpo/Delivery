@@ -17,6 +17,7 @@ import {
   Edit,
   Trash,
   Bot,
+  Users,
 } from "lucide-react";
 
 // Coordenadas centrales de Placilla de Peñuelas
@@ -753,6 +754,16 @@ export default function AdminLukePage() {
           >
             <Bot className="h-3.5 w-3.5 text-blue-400" />
             <span>Configurar Bot</span>
+          </button>
+
+          {/* Botón Gestión de Trabajadores */}
+          <button
+            onClick={() => window.location.href = '/admin-trabajadores'}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
+            title="Gestión de Personal y Permisos"
+          >
+            <Users className="h-3.5 w-3.5 text-emerald-450" />
+            <span>Gestionar Personal</span>
           </button>
 
           {/* Leyenda de prioridad */}
