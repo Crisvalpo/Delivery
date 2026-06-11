@@ -16,6 +16,8 @@ import {
 
 export default function AdminBotPage() {
   const [prompt, setPrompt] = useState("");
+  const [modelName, setModelName] = useState("gemini-2.5-flash");
+  const [temperature, setTemperature] = useState(0.2);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null); // { type: 'success' | 'error', message: string }
@@ -26,13 +28,20 @@ export default function AdminBotPage() {
       try {
         const { data, error } = await supabase
           .from("configuracion_bot")
-          .select("valor")
-          .eq("clave", "prompt_sistema")
-          .maybeSingle();
+          .select("clave, valor");
 
         if (error) throw error;
-        if (data && data.valor) {
-          setPrompt(data.valor);
+        if (data) {
+          const promptConfig = data.find(c => c.clave === "prompt_sistema");
+          const modelConfig = data.find(c => c.clave === "model_name");
+          const tempConfig = data.find(c => c.clave === "temperature");
+
+          if (promptConfig && promptConfig.valor) setPrompt(promptConfig.valor);
+          if (modelConfig && modelConfig.valor) setModelName(modelConfig.valor);
+          if (tempConfig && tempConfig.valor) {
+            const parsedTemp = parseFloat(tempConfig.valor);
+            if (!isNaN(parsedTemp)) setTemperature(parsedTemp);
+          }
         }
       } catch (err) {
         console.error("Error cargando configuración:", err.message);
@@ -61,13 +70,17 @@ export default function AdminBotPage() {
     try {
       const { error } = await supabase
         .from("configuracion_bot")
-        .upsert({ clave: "prompt_sistema", valor: prompt.trim() });
+        .upsert([
+          { clave: "prompt_sistema", valor: prompt.trim() },
+          { clave: "model_name", valor: modelName },
+          { clave: "temperature", valor: temperature.toString() }
+        ]);
 
       if (error) throw error;
 
       setStatus({
         type: "success",
-        message: "¡Configuración del prompt guardada con éxito en Supabase!",
+        message: "¡Configuraciones del bot guardadas con éxito en Supabase!",
       });
 
       // Ocultar mensaje de éxito tras 4 segundos
@@ -78,7 +91,7 @@ export default function AdminBotPage() {
       console.error("Error guardando configuración:", err.message);
       setStatus({
         type: "error",
-        message: "Error al intentar guardar el prompt en la base de datos.",
+        message: "Error al intentar guardar la configuración en la base de datos.",
       });
     } finally {
       setSaving(false);
@@ -118,7 +131,7 @@ export default function AdminBotPage() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <Loader2 className="w-10 h-10 text-emerald-400 animate-spin" />
-            <p className="text-sm text-slate-400">Cargando prompt desde la base de datos...</p>
+            <p className="text-sm text-slate-400">Cargando configuración desde la base de datos...</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -126,23 +139,72 @@ export default function AdminBotPage() {
             {/* Formulario */}
             <div className="md:col-span-2 space-y-6">
               <div className="bg-slate-900/40 border border-slate-900 rounded-xl p-6 backdrop-blur-sm">
-                <form onSubmit={handleSave} className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <label htmlFor="prompt" className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-emerald-400" />
-                      <span>Instrucciones de Sistema (System Prompt)</span>
-                    </label>
-                    <span className="text-xs text-slate-500">Alimentado a Gemini 2.5 Flash</span>
+                <form onSubmit={handleSave} className="space-y-6">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="prompt" className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-emerald-400" />
+                        <span>Instrucciones de Sistema (System Prompt)</span>
+                      </label>
+                      <span className="text-xs text-slate-500">
+                        {modelName === "gemini-2.5-pro" ? "Gemini 2.5 Pro" : "Gemini 2.5 Flash"}
+                      </span>
+                    </div>
+
+                    <textarea
+                      id="prompt"
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      rows={12}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-4 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-slate-300 placeholder-slate-600 transition"
+                      placeholder="Escribe aquí las instrucciones para el comportamiento de la IA..."
+                    />
                   </div>
 
-                  <textarea
-                    id="prompt"
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    rows={15}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-4 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-slate-300 placeholder-slate-600 transition"
-                    placeholder="Escribe aquí las instrucciones para el comportamiento de la IA..."
-                  />
+                  {/* Parámetros del Modelo */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-slate-800/60">
+                    {/* Modelo */}
+                    <div className="space-y-2">
+                      <label htmlFor="modelName" className="text-xs font-semibold text-slate-300 block">
+                        Modelo de Inteligencia Artificial
+                      </label>
+                      <select
+                        id="modelName"
+                        value={modelName}
+                        onChange={(e) => setModelName(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition cursor-pointer"
+                      >
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (Más rápido)</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro (Más inteligente)</option>
+                      </select>
+                    </div>
+
+                    {/* Temperatura */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label htmlFor="temperature" className="text-xs font-semibold text-slate-300">
+                          Temperatura: <span className="text-emerald-400 font-mono">{temperature}</span>
+                        </label>
+                        <span className="text-[10px] text-slate-500 font-medium">
+                          {temperature <= 0.2 ? "Máxima Precisión" : temperature >= 0.7 ? "Más Creativo" : "Equilibrado"}
+                        </span>
+                      </div>
+                      <input
+                        id="temperature"
+                        type="range"
+                        min="0.0"
+                        max="1.0"
+                        step="0.1"
+                        value={temperature}
+                        onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                        className="w-full h-1.5 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                      />
+                      <div className="flex justify-between text-[10px] text-slate-500 px-1">
+                        <span>Preciso (0.0)</span>
+                        <span>Creativo (1.0)</span>
+                      </div>
+                    </div>
+                  </div>
 
                   {status && (
                     <div className={`p-4 rounded-lg flex items-start gap-3 border text-sm ${

@@ -52,6 +52,21 @@ export default async function handler(req, res) {
 
     const cliente = clientes && clientes.length > 0 ? clientes[0] : null;
 
+    // Si encontramos al cliente pero no tenía el LID registrado, lo registramos ahora de forma automática (self-healing)
+    if (cliente && lidClean && cliente.whatsapp_lid !== lidClean) {
+      console.log(`[whatsapp-incoming] Guardando LID ${lidClean} para cliente registrado ${cliente.nombre_contacto}`);
+      const { error: updateLidError } = await supabase
+        .from("clientes")
+        .update({ whatsapp_lid: lidClean })
+        .eq("id", cliente.id);
+
+      if (updateLidError) {
+        console.error("[whatsapp-incoming] Error guardando whatsapp_lid:", updateLidError.message);
+      } else {
+        cliente.whatsapp_lid = lidClean; // actualizar en memoria
+      }
+    }
+
     // Normalizar mensaje para detectar intención de compra
     const msgLower = message.toLowerCase().trim();
     const esIntencionPedido = 
@@ -108,7 +123,7 @@ export default async function handler(req, res) {
           responseText = `¡Hola! Bienvenido a LukeDelivery. Si deseas registrarte y ver nuestro catálogo, responde con la palabra "pedido".`;
         }
       } else {
-        // Obtener el prompt de sistema dinámico de Supabase, con fallback por defecto
+        // Obtener el prompt de sistema y parámetros dinámicos de Supabase, con fallbacks
         let promptSistema = `
 Actúas como "Jaime", el asistente virtual amable de LukeDelivery B2B, un sistema de distribución mayorista para almacenes en Placilla y Curauma (Chile).
 Tu objetivo es responder de forma muy breve, atenta y concisa a los clientes (dueños de almacén) vía WhatsApp.
@@ -120,15 +135,24 @@ Normas de comportamiento:
 4. Si el usuario muestra intenciones claras de querer comprar o hacer un pedido, recuérdale que puede escribir "pedido" en cualquier momento para enviarle su enlace de compra seguro.
 5. NO inventes productos ni precios que no estén en la lista.
 `;
+        let modelName = "gemini-2.5-flash";
+        let temperature = 0.2;
 
-        const { data: dbConfig } = await supabase
+        const { data: dbConfigs } = await supabase
           .from("configuracion_bot")
-          .select("valor")
-          .eq("clave", "prompt_sistema")
-          .maybeSingle();
+          .select("clave, valor");
 
-        if (dbConfig && dbConfig.valor) {
-          promptSistema = dbConfig.valor;
+        if (dbConfigs) {
+          const promptConfig = dbConfigs.find(c => c.clave === "prompt_sistema");
+          const modelConfig = dbConfigs.find(c => c.clave === "model_name");
+          const tempConfig = dbConfigs.find(c => c.clave === "temperature");
+
+          if (promptConfig && promptConfig.valor) promptSistema = promptConfig.valor;
+          if (modelConfig && modelConfig.valor) modelName = modelConfig.valor;
+          if (tempConfig && tempConfig.valor) {
+            const parsedTemp = parseFloat(tempConfig.valor);
+            if (!isNaN(parsedTemp)) temperature = parsedTemp;
+          }
         }
 
         const prompt = `
@@ -141,8 +165,9 @@ Mensaje del usuario: "${message}"
 Respuesta del asistente:`;
 
         try {
+          console.log(`[whatsapp-incoming] Llamando a Gemini con modelo: ${modelName}, temp: ${temperature}`);
           const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`,
             {
               method: "POST",
               headers: {
@@ -150,6 +175,9 @@ Respuesta del asistente:`;
               },
               body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                  temperature: temperature,
+                }
               }),
             }
           );
