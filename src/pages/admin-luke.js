@@ -16,6 +16,7 @@ import {
   Package,
   Edit,
   Trash,
+  Bot,
 } from "lucide-react";
 
 // Coordenadas centrales de Placilla de Peñuelas
@@ -742,6 +743,16 @@ export default function AdminLukePage() {
             title="Refrescar"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
+
+          {/* Botón Ajustes de Bot */}
+          <button
+            onClick={() => window.location.href = '/admin-bot'}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
+            title="Configuración de Asistente Virtual (Bot)"
+          >
+            <Bot className="h-3.5 w-3.5 text-blue-400" />
+            <span>Configurar Bot</span>
           </button>
 
           {/* Leyenda de prioridad */}

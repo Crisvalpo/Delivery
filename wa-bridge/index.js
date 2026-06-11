@@ -79,13 +79,14 @@ async function connectToWhatsApp() {
 
       console.log(`Mensaje recibido de ${senderNumber}: "${messageText}"`);
 
-      // Enviar webhook a n8n
+      // Enviar webhook a n8n (ahora apunta a Next.js)
       try {
         const response = await fetch(N8N_WEBHOOK_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             phone: senderNumber.split('@')[0],
+            jid: senderNumber,
             message: messageText,
             timestamp: msg.messageTimestamp
           })

@@ -8,7 +8,7 @@ export default async function handler(req, res) {
       .json({ success: false, message: `Método ${req.method} no permitido` });
   }
 
-  const { phone, message } = req.body;
+  const { phone, jid, message } = req.body;
 
   if (!phone || !message) {
     return res
@@ -16,7 +16,7 @@ export default async function handler(req, res) {
       .json({ success: false, message: "Campos 'phone' y 'message' son requeridos." });
   }
 
-  console.log(`[whatsapp-incoming] Mensaje de ${phone}: "${message}"`);
+  console.log(`[whatsapp-incoming] Mensaje de ${phone} (JID: ${jid}): "${message}"`);
 
   // Sanitizar teléfono para búsqueda en Supabase
   const phoneClean = phone.replace(/\+/g, "").trim();
@@ -93,12 +93,10 @@ export default async function handler(req, res) {
           responseText = `¡Hola! Bienvenido a LukeDelivery. Si deseas registrarte y ver nuestro catálogo, responde con la palabra "pedido".`;
         }
       } else {
-        const prompt = `
+        // Obtener el prompt de sistema dinámico de Supabase, con fallback por defecto
+        let promptSistema = `
 Actúas como "Jaime", el asistente virtual amable de LukeDelivery B2B, un sistema de distribución mayorista para almacenes en Placilla y Curauma (Chile).
 Tu objetivo es responder de forma muy breve, atenta y concisa a los clientes (dueños de almacén) vía WhatsApp.
-
-Aquí tienes el catálogo de productos disponibles actualmente en la base de datos:
-${catalogoTexto}
 
 Normas de comportamiento:
 1. Responde en español de Chile, de forma cercana y amigable (ej: "¡Hola!", "¡Qué tal!").
@@ -106,6 +104,23 @@ Normas de comportamiento:
 3. Mantén tus respuestas muy cortas (máximo 2 párrafos cortos, preferiblemente menos) ya que se leerán en una pantalla de WhatsApp.
 4. Si el usuario muestra intenciones claras de querer comprar o hacer un pedido, recuérdale que puede escribir "pedido" en cualquier momento para enviarle su enlace de compra seguro.
 5. NO inventes productos ni precios que no estén en la lista.
+`;
+
+        const { data: dbConfig } = await supabase
+          .from("configuracion_bot")
+          .select("valor")
+          .eq("clave", "prompt_sistema")
+          .maybeSingle();
+
+        if (dbConfig && dbConfig.valor) {
+          promptSistema = dbConfig.valor;
+        }
+
+        const prompt = `
+${promptSistema}
+
+Aquí tienes el catálogo de productos disponibles actualmente en la base de datos:
+${catalogoTexto}
 
 Mensaje del usuario: "${message}"
 Respuesta del asistente:`;
@@ -139,14 +154,17 @@ Respuesta del asistente:`;
       }
     }
 
-    // 3. Enviar el mensaje de vuelta al cliente usando el puente local
+    // 3. Enviar el mensaje de vuelta al cliente usando el JID completo (mismo chat de origen)
+    const destinatario = jid || `${phoneClean}@s.whatsapp.net`;
+    console.log(`[whatsapp-incoming] Enviando respuesta a ${destinatario}`);
+
     const sendRes = await fetch("http://localhost:3015/send", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        to: phoneClean,
+        to: destinatario,
         text: responseText,
       }),
     });
