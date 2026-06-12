@@ -23,6 +23,7 @@ import {
   XCircle,
   AlertCircle,
   ShoppingCart,
+  Truck,
 } from "lucide-react";
 import AdminAuthGuard from "@/components/AdminAuthGuard";
 
@@ -656,13 +657,28 @@ export default function AdminLukePage() {
   const handleActualizarEstado = async (pedidoId, nuevoEstado) => {
     setActualizandoPedidoId(pedidoId);
     try {
-      const { error } = await supabase
-        .from("pedidos")
-        .update({ estado: nuevoEstado })
-        .eq("id", pedidoId);
+      // Si el nuevo estado requiere notificación WA, usamos la API ruta-despacho
+      // que actualiza el estado Y envía el mensaje al cliente
+      if (nuevoEstado === "En Ruta" || nuevoEstado === "Entregado") {
+        const res = await fetch("/api/ruta-despacho", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-secret": process.env.NEXT_PUBLIC_ADMIN_SECRET || "",
+          },
+          body: JSON.stringify({ pedido_id: pedidoId, nuevo_estado: nuevoEstado }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || "Error al actualizar estado.");
+      } else {
+        // Para otros estados (Pendiente, Preparado, Cancelado) actualizamos directo
+        const { error } = await supabase
+          .from("pedidos")
+          .update({ estado: nuevoEstado })
+          .eq("id", pedidoId);
+        if (error) throw error;
+      }
 
-      if (error) throw error;
-      
       // Volver a cargar clientes y pedidos para refrescar el mapa y el sidebar
       await fetchClientes();
     } catch (err) {
@@ -923,6 +939,16 @@ export default function AdminLukePage() {
           >
             <ShoppingCart className="h-3.5 w-3.5" />
             <span>Lista Compras</span>
+          </button>
+
+          {/* Botón Ruta del Día (repartidor en terreno) */}
+          <button
+            onClick={() => window.open('/ruta', '_blank')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 hover:border-blue-500/50"
+            title="Vista móvil del repartidor para marcar entregas en terreno"
+          >
+            <Truck className="h-3.5 w-3.5" />
+            <span>Ruta del Día</span>
           </button>
 
           {/* Botón Invitar eliminado: flujo inbound only — el almacenero contacta a Jaime primero */}
