@@ -18,6 +18,10 @@ import {
   Users,
   Calendar,
   Clock,
+  ClipboardList,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
 } from "lucide-react";
 import AdminAuthGuard from "@/components/AdminAuthGuard";
 
@@ -60,6 +64,9 @@ export default function AdminLukePage() {
   const [editingProducto, setEditingProducto] = useState(null);
   const [showProductForm, setShowProductForm] = useState(false);
   const [filtroSoloActivos, setFiltroSoloActivos] = useState(true);
+  const [showConsolidateModal, setShowConsolidateModal] = useState(false);
+  const [consolidadoItems, setConsolidadoItems] = useState([]);
+  const [loadingConsolidado, setLoadingConsolidado] = useState(false);
   const [productForm, setProductForm] = useState({
     nombre: "",
     formato_venta: "",
@@ -136,6 +143,7 @@ export default function AdminLukePage() {
             cantidad,
             precio_unitario,
             total_item,
+            estado,
             productos (
               nombre,
               formato_venta
@@ -181,6 +189,52 @@ export default function AdminLukePage() {
     fetchClientes();
     fetchVentanas();
   }, [fetchClientes, fetchVentanas]);
+
+  const fetchConsolidado = useCallback(async () => {
+    setLoadingConsolidado(true);
+    try {
+      const res = await fetch("/api/admin-consolidar", {
+        headers: { "x-admin-secret": process.env.NEXT_PUBLIC_ADMIN_SECRET || "" }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setConsolidadoItems(data.items || []);
+      }
+    } catch (err) {
+      console.error("[AdminLuke] Error cargando consolidado:", err);
+    } finally {
+      setLoadingConsolidado(false);
+    }
+  }, []);
+
+  const handleActualizarItemConsolidado = async (productoId, accion) => {
+    try {
+      const res = await fetch("/api/admin-consolidar", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-secret": process.env.NEXT_PUBLIC_ADMIN_SECRET || ""
+        },
+        body: JSON.stringify({ producto_id: productoId, accion }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        await fetchConsolidado();
+        await fetchClientes();
+      } else {
+        alert(data.message || "Error al actualizar consolidado");
+      }
+    } catch (err) {
+      console.error("[AdminLuke] Error al actualizar consolidado:", err);
+      alert("Error de conexión al actualizar consolidado");
+    }
+  };
+
+  useEffect(() => {
+    if (showConsolidateModal) {
+      fetchConsolidado();
+    }
+  }, [showConsolidateModal, fetchConsolidado]);
 
   const handleOpenVentanaForm = (ventana = null) => {
     if (ventana) {
@@ -820,6 +874,16 @@ export default function AdminLukePage() {
             <span>Productos</span>
           </button>
 
+          {/* Botón Consolidado de Compras */}
+          <button
+            onClick={() => setShowConsolidateModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
+            title="Ver pedido consolidado de mercadería"
+          >
+            <ClipboardList className="h-3.5 w-3.5 text-brand" />
+            <span>Consolidado</span>
+          </button>
+
           {/* Botón Invitar eliminado: flujo inbound only — el almacenero contacta a Jaime primero */}
 
           <button
@@ -1186,19 +1250,36 @@ export default function AdminLukePage() {
 
                         {/* Order Items */}
                         <div className="border-t border-b border-border/50 py-2.5 my-2.5 space-y-1.5">
-                          {p.items_pedido?.map((item) => (
-                            <div key={item.id} className="flex justify-between text-xs">
-                              <span className="text-text-secondary">
-                                {item.cantidad}x {item.productos?.nombre || "Producto"}
-                                <span className="text-[10px] text-text-dim block">
-                                  {item.productos?.formato_venta}
-                                </span>
-                              </span>
-                              <span className="font-semibold text-text-primary">
-                                ${item.total_item.toLocaleString("es-CL")}
-                              </span>
-                            </div>
-                          ))}
+                          {p.items_pedido?.map((item) => {
+                            const isConseguido = item.estado === 'conseguido';
+                            const isAgotado = item.estado === 'no_disponible';
+                            return (
+                              <div key={item.id} className="flex justify-between items-center text-xs py-1 border-b border-border/10 last:border-0">
+                                <div className="flex-1 min-w-0 pr-3">
+                                  <span className={`text-text-secondary ${isAgotado ? 'line-through opacity-40' : ''}`}>
+                                    {item.cantidad}x {item.productos?.nombre || "Producto"}
+                                  </span>
+                                  <span className="text-[9px] text-text-dim block">
+                                    {item.productos?.formato_venta}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
+                                    isConseguido 
+                                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                                      : isAgotado 
+                                      ? "bg-red-500/10 text-red-400 border border-red-500/20" 
+                                      : "bg-slate-500/10 text-slate-400 border border-slate-500/20"
+                                  }`}>
+                                    {item.estado}
+                                  </span>
+                                  <span className={`font-semibold ${isAgotado ? 'line-through text-text-dim text-[11px]' : 'text-text-primary'}`}>
+                                    ${item.total_item.toLocaleString("es-CL")}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
 
                         {/* Totales */}
@@ -1470,6 +1551,111 @@ export default function AdminLukePage() {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL GESTION CONSOLIDADO DE COMPRAS ===== */}
+      {showConsolidateModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowConsolidateModal(false)}
+          />
+
+          {/* Modal Container */}
+          <div className="relative bg-bg-surface border-2 border-border rounded-2xl w-full sm:max-w-3xl max-h-[90vh] sm:max-h-[80vh] flex flex-col overflow-hidden shadow-2xl animate-fade-in z-[9999]">
+            {/* Header */}
+            <div className="p-5 border-b border-border flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                  <ClipboardList className="h-5 w-5 text-brand" />
+                  Consolidado de Compras (Furgón)
+                </h2>
+                <p className="text-xs text-text-dim mt-0.5">
+                  Mercadería acumulada de los pedidos pendientes en la ventana de entrega activa
+                </p>
+              </div>
+              <button
+                onClick={() => setShowConsolidateModal(false)}
+                className="p-1.5 rounded-lg bg-bg-surface-2 border border-border text-text-dim hover:text-text-primary transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Content list */}
+            <div className="flex-grow overflow-y-auto p-5">
+              {loadingConsolidado ? (
+                <div className="h-48 flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-brand" />
+                  <p className="text-xs text-text-dim font-semibold">Generando gran pedido consolidado...</p>
+                </div>
+              ) : consolidadoItems.length === 0 ? (
+                <div className="h-48 flex flex-col items-center justify-center text-center text-text-dim gap-2.5">
+                  <CheckCircle className="h-10 w-10 text-emerald-500/20 stroke-[1.5]" />
+                  <p className="text-sm font-semibold">¡Nada pendiente por comprar!</p>
+                  <p className="text-xs max-w-xs leading-relaxed">
+                    No hay ítems en estado "pendiente" en los pedidos de la ventana activa, o la toma de pedidos está cerrada.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-border text-text-dim uppercase tracking-wider text-[9px] font-bold">
+                        <th className="pb-3">Producto</th>
+                        <th className="pb-3">Formato</th>
+                        <th className="pb-3 text-center">Cantidad Total Requerida</th>
+                        <th className="pb-3 text-right pr-2">Acciones de Compra</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {consolidadoItems.map((item) => (
+                        <tr key={item.producto_id} className="hover:bg-bg-surface-2/20 transition-colors">
+                          <td className="py-4 font-bold text-text-primary text-sm">
+                            {cleanText(item.nombre)}
+                          </td>
+                          <td className="py-4 font-medium text-text-secondary">
+                            {cleanText(item.formato_venta)}
+                          </td>
+                          <td className="py-4 text-center font-black text-base text-brand">
+                            {item.cantidad_total} unidades
+                          </td>
+                          <td className="py-4 text-right pr-2">
+                            <div className="flex items-center justify-end gap-2.5">
+                              <button
+                                onClick={() => handleActualizarItemConsolidado(item.producto_id, "conseguido")}
+                                className="inline-flex items-center gap-1.5 bg-emerald-500/10 hover:bg-emerald-500 border border-emerald-500/20 hover:border-transparent text-emerald-400 hover:text-white font-bold text-xs px-3.5 py-2 rounded-xl transition duration-200 cursor-pointer"
+                                title="Marcar como conseguido"
+                              >
+                                <CheckCircle className="w-4 h-4 shrink-0" />
+                                <span>Conseguido</span>
+                              </button>
+                              <button
+                                onClick={() => handleActualizarItemConsolidado(item.producto_id, "no_disponible")}
+                                className="inline-flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-transparent text-red-400 hover:text-white font-bold text-xs px-3.5 py-2 rounded-xl transition duration-200 cursor-pointer"
+                                title="Marcar como sin stock/agotado"
+                              >
+                                <XCircle className="w-4 h-4 shrink-0" />
+                                <span>Agotado</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-bg-surface-2 border-t border-border flex items-center gap-2 text-xs text-text-dim">
+              <AlertCircle className="w-4 h-4 text-brand shrink-0" />
+              <span>Marcar un producto actualizará automáticamente el estado en cada pedido individual de los clientes.</span>
             </div>
           </div>
         </div>
