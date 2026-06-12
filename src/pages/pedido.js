@@ -524,14 +524,14 @@ export default function PedidoPage() {
                       return (
                         <div
                           key={p.id}
-                          className={`bg-white border-2 rounded-xl p-4 mb-4 flex items-center gap-4 transition-all ${
+                          className={`bg-white border-2 rounded-xl p-3.5 mb-4 flex items-start gap-3.5 transition-all ${
                             isActive
                               ? "border-brand/60 shadow-lg shadow-brand/5"
                               : "border-gray-200"
                           }`}
                         >
                           {/* Imagen */}
-                          <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-xl overflow-hidden shrink-0 bg-gray-100 border border-gray-200">
+                          <div className="relative w-[72px] h-[72px] rounded-xl overflow-hidden shrink-0 bg-gray-50 border border-gray-100 flex items-center justify-center">
                             {p.url_imagen_retail ? (
                               <img
                                 src={p.url_imagen_retail}
@@ -549,56 +549,64 @@ export default function PedidoPage() {
                               </div>
                             )}
                             {p.categoria_logistica === "Pesado" && (
-                              <div className="absolute top-0 left-0 bg-accent text-black text-[9px] font-black px-2 py-0.5 rounded-br-lg uppercase">
+                              <div className="absolute top-0 left-0 bg-accent text-black text-[8px] font-black px-1.5 py-0.5 rounded-br-lg uppercase">
                                 PESADO
                               </div>
                             )}
                           </div>
 
-                          {/* Info */}
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-lg font-bold text-gray-800 leading-snug break-words">
-                              {p.nombre}
-                            </h3>
-                            <div className="mt-1">
-                              <span className="inline-block bg-gray-100 text-gray-700 text-xs font-semibold px-2.5 py-0.5 rounded-md border border-gray-200">
-                                {p.formato_venta}
-                              </span>
+                          {/* Info y Controles */}
+                          <div className="flex-1 min-w-0 flex flex-col justify-between self-stretch">
+                            <div>
+                              <h3 className="text-[15px] font-bold text-gray-800 leading-snug break-words">
+                                {p.nombre}
+                              </h3>
+                              <div className="mt-0.5">
+                                <span className="inline-block bg-gray-50 text-gray-500 text-[10px] font-semibold px-2 py-0.5 rounded border border-gray-200 leading-none">
+                                  {p.formato_venta}
+                                </span>
+                              </div>
                             </div>
-                            <p className="text-lg font-black text-gray-900 mt-2">
-                              {fmt(p.precio)}
-                              <span className="text-xs text-gray-500 font-medium ml-1.5">
-                                costo real
-                              </span>
-                            </p>
-                          </div>
 
-                          {/* Selector [-] N [+] */}
-                          <div className="flex items-center bg-gray-100 rounded-xl border-2 border-gray-300 shrink-0 h-14 overflow-hidden">
-                            <button
-                              onClick={() => setCantidad(p.id, -1)}
-                              disabled={cant === 0}
-                              className={`h-14 w-14 flex items-center justify-center transition-all cursor-pointer font-bold ${
-                                cant === 0
-                                  ? "text-gray-400 bg-gray-200/50 cursor-not-allowed"
-                                  : "text-gray-800 bg-gray-200 hover:bg-gray-300 active:scale-90"
-                              }`}
-                            >
-                              <Minus className="h-6 w-6 stroke-[3]" />
-                            </button>
-                            <span
-                              className={`w-12 text-center text-xl font-bold px-1 select-none ${
-                                isActive ? "text-brand" : "text-gray-700"
-                              }`}
-                            >
-                              {cant}
-                            </span>
-                            <button
-                              onClick={() => setCantidad(p.id, 1)}
-                              className="h-14 w-14 flex items-center justify-center text-gray-800 bg-gray-200 hover:bg-gray-300 active:scale-90 font-bold transition-all cursor-pointer"
-                            >
-                              <Plus className="h-6 w-6 stroke-[3]" />
-                            </button>
+                            {/* Fila Inferior: Precio e Incrementador */}
+                            <div className="flex items-center justify-between gap-2 mt-2">
+                              <div className="flex flex-col">
+                                <span className="text-[17px] font-black text-gray-900 leading-none">
+                                  {fmt(p.precio)}
+                                </span>
+                                <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-1">
+                                  costo real
+                                </span>
+                              </div>
+
+                              {/* Selector compacto [-] N [+] */}
+                              <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200 overflow-hidden h-9 shrink-0">
+                                <button
+                                  onClick={() => setCantidad(p.id, -1)}
+                                  disabled={cant === 0}
+                                  className={`h-9 w-9 flex items-center justify-center transition-all cursor-pointer font-bold ${
+                                    cant === 0
+                                      ? "text-gray-300 bg-gray-100/50 cursor-not-allowed"
+                                      : "text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90"
+                                  }`}
+                                >
+                                  <Minus className="h-4 w-4 stroke-[3]" />
+                                </button>
+                                <span
+                                  className={`w-8 text-center text-sm font-bold select-none ${
+                                    isActive ? "text-brand" : "text-gray-700"
+                                  }`}
+                                >
+                                  {cant}
+                                </span>
+                                <button
+                                  onClick={() => setCantidad(p.id, 1)}
+                                  className="h-9 w-9 flex items-center justify-center text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90 font-bold transition-all cursor-pointer"
+                                >
+                                  <Plus className="h-4 w-4 stroke-[3]" />
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       );
