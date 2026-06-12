@@ -52,10 +52,16 @@ export default async function handler(req, res) {
 
     const cliente = clientes && clientes.length > 0 ? clientes[0] : null;
 
-    // 1.5. Validar silenciado activo (si está bloqueado por 5 horas)
-    if (cliente && cliente.bot_silenciado_hasta && new Date(cliente.bot_silenciado_hasta) > new Date()) {
-      console.log(`[whatsapp-incoming] Cliente ${phoneClean} está silenciado hasta ${cliente.bot_silenciado_hasta}. Ignorando mensaje.`);
-      return res.status(200).json({ success: true, message: "Bot silenciado temporalmente." });
+    // 1.5. Validar si el número (registrado o no) está silenciado en la tabla whatsapp_bloqueos
+    const { data: bloqueo, error: bloqueoErr } = await supabase
+      .from("whatsapp_bloqueos")
+      .select("silenciado_hasta, motivo")
+      .eq("whatsapp", phoneClean)
+      .maybeSingle();
+
+    if (!bloqueoErr && bloqueo && new Date(bloqueo.silenciado_hasta) > new Date()) {
+      console.log(`[whatsapp-incoming] Remitente ${phoneClean} está silenciado en whatsapp_bloqueos hasta ${bloqueo.silenciado_hasta} por: ${bloqueo.motivo}. Ignorando mensaje.`);
+      return res.status(200).json({ success: true, message: "Bot silenciado temporalmente por desviación." });
     }
 
     // Registrar mensaje de entrada en el historial
@@ -458,14 +464,26 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
                 const { motivo } = args;
                 const cincoHorasMas = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
                 
-                const { error } = await supabase
-                  .from("clientes")
-                  .update({ bot_silenciado_hasta: cincoHorasMas })
-                  .eq("whatsapp", phoneClean);
+                // Guardar bloqueo de forma universal en whatsapp_bloqueos (registrados y no registrados)
+                const { error: errorBloqueo } = await supabase
+                  .from("whatsapp_bloqueos")
+                  .upsert({
+                    whatsapp: phoneClean,
+                    silenciado_hasta: cincoHorasMas,
+                    motivo: motivo
+                  });
 
-                dbResult = error
-                  ? `Error al silenciar: ${error.message}`
-                  : `Éxito: El usuario ha sido silenciado en Supabase hasta ${cincoHorasMas} debido a: ${motivo}. Debes avisarle claramente al usuario en tu respuesta que debido a que sus consultas se desvían de las compras, tu sistema se pausará y no podrás responderle en las próximas 5 horas.`;
+                // Por retrocompatibilidad, si es un cliente registrado, también actualizamos su campo en clientes
+                if (cliente) {
+                  await supabase
+                    .from("clientes")
+                    .update({ bot_silenciado_hasta: cincoHorasMas })
+                    .eq("id", cliente.id);
+                }
+
+                dbResult = errorBloqueo
+                  ? `Error al silenciar en bloqueos: ${errorBloqueo.message}`
+                  : `Éxito: El usuario ha sido bloqueado en Supabase hasta ${cincoHorasMas} debido a: ${motivo}. Debes avisarle claramente al usuario en tu respuesta que debido a que sus consultas se desvían de las compras, tu sistema se pausará y no podrás responderle en las próximas 5 horas.`;
               }
               else if (name === "consultar_pedidos_cliente") {
                 if (!cliente) {
