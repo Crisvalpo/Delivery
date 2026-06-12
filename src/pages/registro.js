@@ -41,30 +41,38 @@ export default function RegistroPage() {
   useEffect(() => {
     if (!router.isReady) return;
 
-    const checkRegistration = async (phoneVal) => {
+    const checkRegistration = async (phoneVal, lidVal) => {
       setCheckingRegistered(true);
-      const cleanVal = phoneVal.replace(/[^0-9]/g, "");
       
-      // Si parece un LID de WhatsApp (longitud mayor a 11 o no empieza con 569/9)
-      const isLid = cleanVal.length > 11 || (!cleanVal.startsWith("569") && !cleanVal.startsWith("9"));
-      
-      let finalLid = null;
-      let formattedWhatsapp = null;
+      let finalLid = lidVal ? lidVal.replace(/[^0-9]/g, "") : null;
+      if (finalLid) {
+        setWhatsappLid(finalLid);
+      }
 
-      if (isLid) {
-        finalLid = cleanVal;
-        setWhatsappLid(cleanVal);
-        setIsPhonePrefilled(false); // Sigue siendo editable ya que necesitamos su celular real
-      } else {
-        let formatted = cleanVal;
-        if (formatted.startsWith("9") && formatted.length === 9) {
-          formatted = "+56" + formatted;
-        } else if (formatted.startsWith("569") && formatted.length === 11) {
-          formatted = "+" + formatted;
+      let formattedWhatsapp = null;
+      const cleanVal = phoneVal ? phoneVal.replace(/[^0-9]/g, "") : "";
+      
+      if (cleanVal) {
+        // Si parece un LID de WhatsApp (longitud mayor a 11 o no empieza con 569/9)
+        const isLid = cleanVal.length > 11 || (!cleanVal.startsWith("569") && !cleanVal.startsWith("9"));
+
+        if (isLid) {
+          if (!finalLid) {
+            finalLid = cleanVal;
+            setWhatsappLid(cleanVal);
+          }
+          setIsPhonePrefilled(false); // Sigue siendo editable ya que necesitamos su celular real
+        } else {
+          let formatted = cleanVal;
+          if (formatted.startsWith("9") && formatted.length === 9) {
+            formatted = "+56" + formatted;
+          } else if (formatted.startsWith("569") && formatted.length === 11) {
+            formatted = "+" + formatted;
+          }
+          formattedWhatsapp = formatted;
+          setWhatsapp(formatted);
+          setIsPhonePrefilled(true); // Bloqueamos edición
         }
-        formattedWhatsapp = formatted;
-        setWhatsapp(formatted);
-        setIsPhonePrefilled(true); // Bloqueamos edición
       }
 
       try {
@@ -98,8 +106,15 @@ export default function RegistroPage() {
       }
     };
 
-    if (router.query && router.query.phone) {
-      checkRegistration(router.query.phone.toString().trim());
+    if (router.query) {
+      const qPhone = router.query.phone ? router.query.phone.toString().trim() : null;
+      const qLid = router.query.lid ? router.query.lid.toString().trim() : null;
+      
+      if (qPhone || qLid) {
+        checkRegistration(qPhone, qLid);
+      } else {
+        setCheckingRegistered(false);
+      }
     } else {
       setCheckingRegistered(false);
     }

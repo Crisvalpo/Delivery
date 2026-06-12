@@ -220,9 +220,12 @@ export default async function handler(req, res) {
           }
         }
       } else {
-        // Invitación a registro si no existe, usando el identificador original (puede ser LID o número)
-        const rawPhoneClean = phone.replace(/\+/g, "").trim();
-        responseText = `¡Hola! Aún no estás registrado en LukeDelivery 📦. Te invito a registrarte gratis y sin compromiso de compra. Al entrar, podrás ver todo nuestro catálogo de ofertas al costo para mirar tranquilo 👇\n\n👉 https://lukeapp.me/registro?phone=${rawPhoneClean}`;
+        // Invitación a registro si no existe, pasando el número real y el LID de WhatsApp si está disponible
+        let registrationUrl = `https://lukeapp.me/registro?phone=${phoneClean}`;
+        if (lidClean) {
+          registrationUrl += `&lid=${lidClean}`;
+        }
+        responseText = `¡Hola! Aún no estás registrado en LukeDelivery 📦. Te invito a registrarte gratis y sin compromiso de compra. Al entrar, podrás ver todo nuestro catálogo de ofertas al costo para mirar tranquilo 👇\n\n👉 ${registrationUrl}`;
       }
     } else {
       // 2. No es intención directa de pedido: Consultamos a Gemini con el catálogo de productos
