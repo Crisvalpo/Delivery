@@ -108,14 +108,50 @@ export default async function handler(req, res) {
     }
 
     // Normalizar mensaje para detectar intención de compra
-    const msgLower = message.toLowerCase().trim();
-    const esIntencionPedido = 
-      msgLower.includes("pedido") || 
-      msgLower.includes("comprar") || 
-      msgLower.includes("compra") || 
-      msgLower.includes("catalogo") || 
-      msgLower.includes("catálogo") || 
+    // IMPORTANTE: debe ser compra ACTIVA, no consulta de estado de pedido existente.
+    // Palabras como "cuándo llegará mi pedido" NO son intención de compra.
+    const msgLower = message ? message.toLowerCase().trim() : "";
+
+    // Palabras que indican que es una CONSULTA de estado (no una compra)
+    const esConsultaEstado =
+      msgLower.includes("cuando") ||
+      msgLower.includes("cuándo") ||
+      msgLower.includes("estado") ||
+      msgLower.includes("donde") ||
+      msgLower.includes("dónde") ||
+      msgLower.includes("llegará") ||
+      msgLower.includes("llegara") ||
+      msgLower.includes("llego") ||
+      msgLower.includes("llegó") ||
+      msgLower.includes("track") ||
+      msgLower.includes("seguimiento") ||
+      msgLower.includes("mi pedido");
+
+    // Frases de compra ACTIVA (el cliente quiere HACER un pedido nuevo)
+    const esFraseCompraActiva =
+      msgLower === "pedido" ||
+      msgLower === "compra" ||
+      msgLower === "catalogo" ||
+      msgLower === "catálogo" ||
+      msgLower === "oferta" ||
+      msgLower === "ofertas" ||
+      msgLower.includes("hacer pedido") ||
+      msgLower.includes("hacer un pedido") ||
+      msgLower.includes("quiero pedir") ||
+      msgLower.includes("quiero comprar") ||
+      msgLower.includes("quiero hacer") ||
+      msgLower.includes("hacer compra") ||
+      msgLower.includes("necesito pedir") ||
+      msgLower.includes("ver catalogo") ||
+      msgLower.includes("ver catálogo") ||
+      msgLower.includes("ver ofertas") ||
+      msgLower.includes("comprar") ||
+      msgLower.includes("catálogo") ||
+      msgLower.includes("catalogo") ||
       msgLower.includes("oferta");
+
+    // Es intención de pedido SOLO si es frase activa Y NO es consulta de estado
+    const esIntencionPedido = esFraseCompraActiva && !esConsultaEstado;
 
     let responseText = "";
     let audioBase64ParaEnviar = null;
