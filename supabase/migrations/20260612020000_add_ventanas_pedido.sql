@@ -28,3 +28,6 @@ CREATE POLICY modificacion_ventanas_pedido ON public.ventanas_pedido
 -- 4. Agregar columna ventana_id a pedidos
 ALTER TABLE public.pedidos 
 ADD COLUMN IF NOT EXISTS ventana_id UUID REFERENCES public.ventanas_pedido(id);
+
+-- 5. Conceder privilegios explícitos para roles de Supabase
+GRANT ALL PRIVILEGES ON public.ventanas_pedido TO postgres, anon, authenticated, service_role;
