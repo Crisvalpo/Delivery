@@ -8,6 +8,20 @@ export default async function handler(req, res) {
       .json({ success: false, message: `Método ${req.method} no permitido` });
   }
 
+  // 🔐 Validar secreto del puente Baileys (WA_BRIDGE_SECRET)
+  // Si la variable está definida, el header debe coincidir exactamente.
+  // Si no está definida (primera configuración), se omite la validación con advertencia.
+  const bridgeSecret = process.env.WA_BRIDGE_SECRET;
+  if (bridgeSecret && bridgeSecret.trim() !== "") {
+    const providedSecret = req.headers["x-wa-bridge-secret"];
+    if (providedSecret !== bridgeSecret) {
+      console.warn("[whatsapp-incoming] 🚫 Solicitud rechazada: secreto de bridge inválido o ausente.");
+      return res.status(401).json({ success: false, message: "No autorizado." });
+    }
+  } else {
+    console.warn("[whatsapp-incoming] ⚠️ WA_BRIDGE_SECRET no configurado. Autenticación del puente desactivada.");
+  }
+
   const { phone, jid, message, audio, senderPn } = req.body;
 
   if (!phone || (!message && !audio)) {

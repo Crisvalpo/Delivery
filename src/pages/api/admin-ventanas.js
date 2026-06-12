@@ -1,6 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { validateAdminSecret, sendUnauthorized } from "@/lib/admin-auth";
 
 export default async function handler(req, res) {
+  // 🔐 Validar secreto de administrador en todas las operaciones
+  if (!validateAdminSecret(req)) return sendUnauthorized(res);
+
   const supabase = createAdminClient();
 
   if (req.method === "GET") {
