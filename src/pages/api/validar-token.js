@@ -79,12 +79,40 @@ export default async function handler(req, res) {
         .maybeSingle();
 
       if (!pedErr && pedPend) {
-        pedidoPendiente = pedPend;
+        // Buscar items del pedido
+        const { data: items, error: itemsErr } = await supabase
+          .from("items_pedido")
+          .select(`
+            id,
+            producto_id,
+            cantidad,
+            precio_unitario,
+            total_item,
+            productos (nombre, formato_venta)
+          `)
+          .eq("pedido_id", pedPend.id);
+
+        if (!itemsErr && items) {
+          pedidoPendiente = {
+            ...pedPend,
+            items: items.map(it => ({
+              id: it.producto_id,
+              nombre: it.productos?.nombre || "Producto",
+              formato_venta: it.productos?.formato_venta || "",
+              cantidad: it.cantidad,
+              precioUnitario: it.precio_unitario,
+              totalItem: it.total_item
+            }))
+          };
+        } else {
+          pedidoPendiente = pedPend;
+        }
       }
     }
 
     return res.status(200).json({
       success: true,
+      usado: sesion.usado || false,
       cliente_id: sesion.cliente_id,
       cliente: {
         id: cliente.id,

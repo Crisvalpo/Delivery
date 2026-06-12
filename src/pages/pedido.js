@@ -38,6 +38,7 @@ export default function PedidoPage() {
   const [orderSummary, setOrderSummary] = useState(null);
   const [ventanaActiva, setVentanaActiva] = useState(null);
   const [pedidoPendiente, setPedidoPendiente] = useState(null);
+  const [tokenUsado, setTokenUsado] = useState(false);
 
   const supabase = createClient();
 
@@ -121,6 +122,7 @@ export default function PedidoPage() {
           setClienteInfo(data.cliente);
           setVentanaActiva(data.ventanaActiva || null);
           setPedidoPendiente(data.pedidoPendiente || null);
+          setTokenUsado(data.usado || false);
         } else if (cliente_id) {
           // Retrocompatibilidad con cliente_id directo (ej: para pruebas locales/admin)
           const { data, error: cliErr } = await supabase
@@ -286,7 +288,7 @@ export default function PedidoPage() {
 
       <main className="max-w-lg mx-auto px-4 pt-5 pb-36">
         {/* ===== BANNER VENTANA ACTIVA ===== */}
-        {!tokenError && !loading && ventanaActiva && (
+        {!tokenError && !loading && ventanaActiva && !tokenUsado && (
           <div className="bg-brand/10 border border-brand/20 rounded-2xl p-4.5 mb-5 flex items-start gap-3 animate-fade-in shadow-sm">
             <Truck className="h-5.5 w-5.5 text-brand shrink-0 mt-0.5" />
             <div className="text-xs">
@@ -327,7 +329,7 @@ export default function PedidoPage() {
         )}
 
         {/* ===== ACCESSIBLE INFORMATION CARD (SENIOR-OPTIMIZED) ===== */}
-        {!tokenError && !loading && ventanaActiva && (
+        {!tokenError && !loading && ventanaActiva && !tokenUsado && (
           <div className="grid grid-cols-1 gap-4 mb-6 animate-fade-in">
             {/* Costo de Flete Card */}
             <div className="bg-bg-surface border-2 border-border rounded-2xl p-5 text-center flex flex-col items-center">
@@ -390,6 +392,108 @@ export default function PedidoPage() {
             <p className="text-text-secondary">
               No hay productos disponibles para tu tipo de negocio en este momento.
             </p>
+          </div>
+        ) : !tokenError && tokenUsado ? (
+          /* ===== VISTA DE RESUMEN DE PEDIDO (READ-ONLY) ===== */
+          <div className="bg-bg-surface border-2 border-border rounded-3xl p-6 shadow-xl animate-fade-in flex flex-col gap-6">
+            <div className="flex flex-col items-center text-center gap-2">
+              <div className="bg-brand/10 text-brand p-3.5 rounded-full w-fit">
+                <Check className="h-10 w-10 text-brand" />
+              </div>
+              <h2 className="text-xl font-black text-text-primary mt-2">
+                Pedido Confirmado y en Preparación
+              </h2>
+              <span className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                Recibido
+              </span>
+            </div>
+
+            {pedidoPendiente ? (
+              <>
+                {/* Info de Despacho */}
+                {ventanaActiva && (
+                  <div className="bg-bg-surface-2 border border-border rounded-2xl p-4 flex gap-3 items-start">
+                    <Truck className="h-5 w-5 text-brand shrink-0 mt-0.5" />
+                    <div className="text-xs">
+                      <p className="font-extrabold text-text-primary">Programado para entrega</p>
+                      <p className="text-text-secondary mt-0.5">
+                        {formatFechaEntrega(ventanaActiva.fecha_entrega)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Items del Pedido */}
+                <div>
+                  <h3 className="text-sm font-black text-text-secondary uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <Package className="h-4 w-4 text-brand" /> Detalle de productos
+                  </h3>
+                  <div className="border border-border rounded-2xl overflow-hidden divide-y divide-border bg-bg-surface-2 max-h-60 overflow-y-auto">
+                    {pedidoPendiente.items && pedidoPendiente.items.map((it) => (
+                      <div key={it.id} className="p-3.5 flex items-center justify-between gap-4 text-xs">
+                        <div className="min-w-0">
+                          <p className="font-bold text-text-primary truncate">{it.nombre}</p>
+                          <span className="text-[10px] text-text-dim mt-0.5 inline-block bg-bg-surface border border-border px-1.5 py-0.5 rounded">
+                            {it.formato_venta}
+                          </span>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-black text-text-primary">
+                            {it.cantidad} {it.cantidad === 1 ? "und" : "unds"} x {fmt(it.precioUnitario)}
+                          </p>
+                          <p className="text-[10px] text-brand font-bold mt-0.5">
+                            Subtotal: {fmt(it.totalItem)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Resumen Financiero */}
+                <div className="bg-bg-surface-2 border border-border rounded-2xl p-4.5 space-y-2.5 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-text-secondary">Neto Mercadería:</span>
+                    <span className="text-text-primary font-bold">{fmt(pedidoPendiente.total_neto || 0)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-text-secondary">Costo de Flete:</span>
+                    <span className="text-text-primary font-bold">{fmt(pedidoPendiente.flete || 0)}</span>
+                  </div>
+                  <div className="border-t border-border pt-2.5 flex justify-between text-sm font-black">
+                    <span className="text-brand">TOTAL A PAGAR:</span>
+                    <span className="text-brand">{fmt(pedidoPendiente.total_pagar || 0)}</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-text-secondary text-center">
+                No se encontró un pedido activo para esta ventana.
+              </p>
+            )}
+
+            {/* Advertencia / Call to action */}
+            <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4.5 flex gap-3 text-left">
+              <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <p className="font-black text-amber-600">¿Quieres agregar más productos?</p>
+                <p className="text-text-secondary mt-1 leading-relaxed">
+                  Por seguridad y para evitar fraudes, este enlace ya no permite modificar el pedido directamente. 
+                  Si deseas agregar más artículos, solicita un nuevo enlace con el bot Jaime en WhatsApp.
+                </p>
+                <p className="text-text-secondary mt-1.5 font-bold">
+                  ¡Los nuevos productos se fusionarán automáticamente sin flete extra!
+                </p>
+              </div>
+            </div>
+
+            {/* Botón WhatsApp */}
+            <a
+              href="https://wa.me/56951875221?text=Quiero%20agregar%20m%C3%A1s%20productos%20a%20mi%20pedido"
+              className="inline-flex items-center justify-center bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-4 px-6 rounded-xl transition-all w-full text-sm shadow-lg shadow-[#25D366]/20 uppercase tracking-wide gap-2"
+            >
+              📲 Solicitar nuevo enlace por WhatsApp
+            </a>
           </div>
         ) : !tokenError && ventanaActiva && (
           /* ===== PRODUCT LIST AGROUPED BY CATEGORY ===== */
@@ -509,7 +613,7 @@ export default function PedidoPage() {
 
 
       {/* ===== STICKY FOOTER: REGLA DEL FURGÓN ===== */}
-      {!tokenError && !loading && productosFiltrados.length > 0 && ventanaActiva && (
+      {!tokenError && !loading && productosFiltrados.length > 0 && ventanaActiva && !tokenUsado && (
         <footer className="fixed bottom-0 inset-x-0 bg-bg-surface/95 backdrop-blur-xl border-t border-border py-6 px-5 z-40">
           <div className="max-w-lg mx-auto">
             {/* Progress bar */}
@@ -615,10 +719,22 @@ export default function PedidoPage() {
             </div>
 
             <button
-              onClick={() => setOrderSuccess(false)}
+              onClick={() => {
+                setOrderSuccess(false);
+                setTokenUsado(true);
+                if (orderSummary) {
+                  setPedidoPendiente({
+                    id: orderSummary.pedido_id,
+                    total_neto: orderSummary.totalNeto,
+                    flete: orderSummary.flete,
+                    total_pagar: orderSummary.totalPagar,
+                    items: orderSummary.items
+                  });
+                }
+              }}
               className="w-full h-16 bg-brand hover:bg-brand-hover active:scale-95 text-white text-lg font-black rounded-2xl flex items-center justify-center gap-3 transition-all cursor-pointer shadow-lg shadow-brand/25 uppercase tracking-wide"
             >
-              Volver al Catálogo
+              Ver Resumen de mi Pedido
             </button>
           </div>
         </div>
