@@ -211,6 +211,7 @@ Normas de comportamiento:
 3. Mantén tus respuestas muy cortas (máximo 2 párrafos cortos, preferiblemente menos) ya que se leerán en una pantalla de WhatsApp.
 4. Si el usuario muestra intenciones claras de querer comprar o hacer un pedido, recuérdale que puede escribir "pedido" en cualquier momento para enviarle su enlace de compra seguro.
 5. NO inventes productos ni precios que no estén en la lista.
+6. Todos los precios están expresados en Pesos Chilenos (CLP, $). Bajo ninguna circunstancia uses dólares (USD, $ USD) ni menciones transacciones en dólares. Si hablas de precios o dinero, exprésalo siempre en pesos chilenos y antepón el signo $.
 `;
         let modelName = "gemini-2.5-flash";
         let temperature = 0.2;
