@@ -114,18 +114,30 @@ export default async function handler(req, res) {
 
     // Palabras que indican que es una CONSULTA de estado (no una compra)
     const esConsultaEstado =
+      // Tiempo / cuándo llega
       msgLower.includes("cuando") ||
       msgLower.includes("cuándo") ||
-      msgLower.includes("estado") ||
-      msgLower.includes("donde") ||
-      msgLower.includes("dónde") ||
       msgLower.includes("llegará") ||
       msgLower.includes("llegara") ||
       msgLower.includes("llego") ||
       msgLower.includes("llegó") ||
-      msgLower.includes("track") ||
+      msgLower.includes("llega") ||
+      // Estado del pedido existente
+      msgLower.includes("estado") ||
       msgLower.includes("seguimiento") ||
-      msgLower.includes("mi pedido");
+      msgLower.includes("track") ||
+      msgLower.includes("mi pedido") ||
+      // Tengo / existe (cliente preguntando por su pedido o stock)
+      msgLower.includes("tengo") ||
+      msgLower.includes("existe") ||
+      msgLower.includes("tienen") ||
+      msgLower.includes("hay ") ||       // "¿Hay aceite?" — ojo: espacio para evitar "hay que"
+      msgLower === "hay" ||
+      msgLower.includes("disponible") ||
+      msgLower.includes("saldo") ||
+      // Ubicación
+      msgLower.includes("donde") ||
+      msgLower.includes("dónde");
 
     // Frases de compra ACTIVA (el cliente quiere HACER un pedido nuevo)
     const esFraseCompraActiva =
