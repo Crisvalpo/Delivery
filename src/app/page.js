@@ -56,7 +56,7 @@ export default function HomePage() {
             
             <Link
               href="/registro"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 hover:text-white font-bold text-base px-8 py-4 rounded-2xl transition duration-300 backdrop-blur-sm cursor-pointer"
+              className="sm:hidden w-full inline-flex items-center justify-center gap-2 bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 hover:text-white font-bold text-base px-8 py-4 rounded-2xl transition duration-300 backdrop-blur-sm cursor-pointer"
             >
               <UserPlus className="w-5 h-5 shrink-0 text-emerald-400" />
               <span>Registrar mi Almacén</span>
@@ -117,7 +117,7 @@ export default function HomePage() {
           </div>
 
           {/* Grid: Mini Benefits */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-slate-900/30 border border-slate-900/50 rounded-2xl p-4.5 flex gap-3 items-start backdrop-blur-sm">
               <Percent className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               <div>

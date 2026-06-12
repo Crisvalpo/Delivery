@@ -17,6 +17,7 @@ import {
   Check,
   AlertCircle,
   ChevronDown,
+  Smartphone,
 } from "lucide-react";
 
 const atkinson = Atkinson_Hyperlegible_Next({
@@ -115,6 +116,15 @@ export default function RegistroPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  // Detectar si el usuario está en escritorio al montar
+  useEffect(() => {
+    const checkDesktop = () => setIsDesktop(window.innerWidth >= 768);
+    checkDesktop();
+    window.addEventListener("resize", checkDesktop);
+    return () => window.removeEventListener("resize", checkDesktop);
+  }, []);
 
   // Sectores de Placilla / Curauma
   const sectores = [
@@ -240,6 +250,43 @@ export default function RegistroPage() {
       setIsSubmitting(false);
     }
   };
+
+  // Bloqueo para escritorio
+  if (isDesktop) {
+    return (
+      <div className={`min-h-screen bg-slate-950 flex flex-col items-center justify-center px-6 ${atkinson.className}`}>
+        <Head>
+          <title>Solo Móvil | LukeDelivery</title>
+        </Head>
+        <div className="max-w-sm w-full text-center space-y-6">
+          <div className="flex justify-center">
+            <div className="bg-orange-500/10 border border-orange-500/20 p-6 rounded-full">
+              <Smartphone className="h-12 w-12 text-orange-400" />
+            </div>
+          </div>
+          <div className="space-y-3">
+            <h1 className="text-2xl font-black text-slate-100 tracking-tight">
+              Página solo disponible en móvil
+            </h1>
+            <p className="text-slate-400 text-sm leading-relaxed font-medium">
+              El registro de almacenes requiere GPS y está diseñado exclusivamente para ser completado desde tu teléfono celular.
+            </p>
+            <p className="text-slate-500 text-xs font-semibold">
+              Escanea el QR de nuestro volante desde tu smartphone para continuar.
+            </p>
+          </div>
+          <div className="border-t border-slate-800 pt-6">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 text-orange-400 hover:text-orange-300 font-bold text-sm transition-colors"
+            >
+              ← Volver al inicio
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (checkingRegistered) {
     return (

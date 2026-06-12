@@ -80,6 +80,7 @@ export default function AdminLukePage() {
   const [clickCoords, setClickCoords] = useState(null);
   const [saving, setSaving] = useState(false);
   const [modoEdicion, setModoEdicion] = useState(false);
+  const [modoCrear, setModoCrear] = useState(false);
   const [sidebarCliente, setSidebarCliente] = useState(null);
   const [actualizandoPedidoId, setActualizandoPedidoId] = useState(null);
   const [form, setForm] = useState({
@@ -115,6 +116,11 @@ export default function AdminLukePage() {
   useEffect(() => {
     modoEdicionRef.current = modoEdicion;
   }, [modoEdicion]);
+
+  const modoCrearRef = useRef(modoCrear);
+  useEffect(() => {
+    modoCrearRef.current = modoCrear;
+  }, [modoCrear]);
 
   // --- Cargar clientes, pedidos y productos ---
   const fetchClientes = useCallback(async () => {
@@ -393,8 +399,10 @@ export default function AdminLukePage() {
       markersLayer.current = L.layerGroup().addTo(map);
 
       // Evento de clic en el mapa para registrar nuevos clientes
+      // Solo activo cuando modoCrearRef.current está encendido
       map.on("click", (e) => {
         if (modoEdicionRef.current) return;
+        if (!modoCrearRef.current) return; // Requiere modo crear activo
         setClickCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
         setForm({
           nombre_tienda: "",
@@ -405,6 +413,7 @@ export default function AdminLukePage() {
           prioridad_territorial: "Media",
           tipo_negocio: "Almacén",
         });
+        setModoCrear(false); // Desactivar modo crear al abrir el modal
         setShowModal(true);
       });
 
@@ -844,13 +853,34 @@ export default function AdminLukePage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Botón Modo Crear Nuevo Almacén */}
+          <button
+            onClick={() => {
+              setModoCrear(!modoCrear);
+              if (modoEdicion) setModoEdicion(false); // mutuamente exclusivos
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+              modoCrear
+                ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-lg shadow-emerald-500/10 animate-pulse"
+                : "bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
+            }`}
+            title={modoCrear ? "Haz clic en el mapa para posicionar el nuevo almacén" : "Activar modo: crear nuevo almacén haciendo clic en el mapa"}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>{modoCrear ? "Clic en el mapa..." : "Nuevo Almacén"}</span>
+            {modoCrear && <X className="h-3 w-3 ml-0.5 opacity-70" />}
+          </button>
+
           {/* Switch de Modo Edición de Ubicación */}
           <div className="flex items-center gap-2.5 bg-bg-surface-2 border border-border px-3 py-1.5 rounded-xl">
             <span className="text-[11px] font-bold text-text-secondary select-none">
               Ajustar Ubicación
             </span>
             <button
-              onClick={() => setModoEdicion(!modoEdicion)}
+              onClick={() => {
+                setModoEdicion(!modoEdicion);
+                if (modoCrear) setModoCrear(false); // mutuamente exclusivos
+              }}
               className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
                 modoEdicion ? "bg-amber-500 shadow-md shadow-amber-500/20" : "bg-bg-app"
               }`}
