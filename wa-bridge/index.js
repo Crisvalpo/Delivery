@@ -133,9 +133,13 @@ async function connectToWhatsApp() {
 
       // Enviar webhook a n8n (ahora apunta a Next.js)
       try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (process.env.WA_BRIDGE_SECRET) {
+          headers['x-wa-bridge-secret'] = process.env.WA_BRIDGE_SECRET;
+        }
         const response = await fetch(N8N_WEBHOOK_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: headers,
           body: JSON.stringify({
             phone: senderClean,
             jid: senderNumber,
