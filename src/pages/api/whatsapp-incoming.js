@@ -108,18 +108,54 @@ export default async function handler(req, res) {
 
     if (esIntencionPedido) {
       if (cliente) {
-        // Generar sesión de formulario temporal
-        const { data: sesion, error: sesionError } = await supabase
-          .from("sesiones_formulario")
-          .insert({ cliente_id: cliente.id })
-          .select("token")
-          .single();
+        // Validar si hay una ventana activa antes de generar enlace
+        const nowISO = new Date().toISOString();
+        const { data: ventanaActiva, error: ventanaErr } = await supabase
+          .from("ventanas_pedido")
+          .select("*")
+          .eq("activa", true)
+          .gt("fecha_cierre", nowISO)
+          .order("fecha_cierre", { ascending: true })
+          .limit(1)
+          .maybeSingle();
 
-        if (sesionError) {
-          console.error("[whatsapp-incoming] Error creando sesión:", sesionError.message);
-          responseText = `¡Hola ${cliente.nombre_contacto}! Tuvimos un detalle técnico al generar tu enlace de compra. Por favor, intenta de nuevo escribiendo "pedido" en unos momentos.`;
+        if (ventanaErr) {
+          console.error("[whatsapp-incoming] Error buscando ventana activa:", ventanaErr.message);
+        }
+
+        if (!ventanaActiva) {
+          // Buscar próxima ventana activa
+          const { data: proximaVentana } = await supabase
+            .from("ventanas_pedido")
+            .select("*")
+            .eq("activa", true)
+            .order("fecha_cierre", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+          if (proximaVentana) {
+            const fechaApertura = new Date(proximaVentana.fecha_cierre).toLocaleString("es-CL", {
+              dateStyle: "short",
+              timeStyle: "short"
+            });
+            responseText = `¡Hola ${cliente.nombre_contacto}! En este momento la toma de pedidos está cerrada 📦 para despachar la ruta actual. La próxima ventana de pedidos se abrirá el ${fechaApertura}. ¡Te esperamos!`;
+          } else {
+            responseText = `¡Hola ${cliente.nombre_contacto}! En este momento la toma de pedidos está cerrada 📦 para despachar la ruta actual. Te avisaremos por aquí en cuanto habilitemos una nueva ventana de despachos.`;
+          }
         } else {
-          responseText = `¡Hola ${cliente.nombre_contacto}! 👋 Abre este enlace para armar tu pedido de catálogo de ofertas de forma segura. El enlace expira en 2 horas:\n\n👉 https://lukeapp.me/pedido?token=${sesion.token}`;
+          // Generar sesión de formulario temporal
+          const { data: sesion, error: sesionError } = await supabase
+            .from("sesiones_formulario")
+            .insert({ cliente_id: cliente.id })
+            .select("token")
+            .single();
+
+          if (sesionError) {
+            console.error("[whatsapp-incoming] Error creando sesión:", sesionError.message);
+            responseText = `¡Hola ${cliente.nombre_contacto}! Tuvimos un detalle técnico al generar tu enlace de compra. Por favor, intenta de nuevo escribiendo "pedido" en unos momentos.`;
+          } else {
+            responseText = `¡Hola ${cliente.nombre_contacto}! 👋 Abre este enlace para armar tu pedido de catálogo de ofertas de forma segura. El enlace expira en 2 horas:\n\n👉 https://lukeapp.me/pedido?token=${sesion.token}`;
+          }
         }
       } else {
         // Invitación a registro si no existe, usando el identificador original (puede ser LID o número)
@@ -185,12 +221,74 @@ Normas de comportamiento:
         const margenConfig = dbConfigs ? dbConfigs.find(c => c.clave === "margen_ganancia") : null;
         const margenPercent = margenConfig ? margenConfig.valor : "20";
 
+        // Consultar ventana activa de pedidos para inyectar en el prompt
+        const nowISO = new Date().toISOString();
+        const { data: ventanaActiva } = await supabase
+          .from("ventanas_pedido")
+          .select("*")
+          .eq("activa", true)
+          .gt("fecha_cierre", nowISO)
+          .order("fecha_cierre", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        let infoVentanaPrompt = "";
+        if (ventanaActiva) {
+          const formatFechaEntrega = (fechaStr) => {
+            const fecha = new Date(fechaStr);
+            const ahora = new Date();
+            const fechaClean = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+            const ahoraClean = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+            const diffDays = Math.round((fechaClean - ahoraClean) / (1000 * 60 * 60 * 24));
+            const diasSemana = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+            const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+            const diaNombre = diasSemana[fecha.getDay()];
+            const diaMes = fecha.getDate();
+            const mesNombre = meses[fecha.getMonth()];
+            const hora = fecha.getHours();
+            const jornada = hora < 13 ? "la mañana" : "la tarde";
+            const fechaFormateada = `${diaMes} de ${mesNombre}`;
+            if (diffDays === 0) return `hoy ${diaNombre} ${fechaFormateada} durante ${jornada}`;
+            if (diffDays === 1) return `mañana ${diaNombre} ${fechaFormateada} durante ${jornada}`;
+            return `el ${diaNombre} ${fechaFormateada} durante ${jornada}`;
+          };
+
+          infoVentanaPrompt = `
+- La toma de pedidos está ABIERTA en la ventana actual: "${ventanaActiva.nombre}".
+- Los pedidos de esta ventana se entregarán: ${formatFechaEntrega(ventanaActiva.fecha_entrega)}.
+- La hora de cierre para esta ventana de pedidos es: ${new Date(ventanaActiva.fecha_cierre).toLocaleString("es-CL")}.
+`;
+        } else {
+          const { data: proximaVentana } = await supabase
+            .from("ventanas_pedido")
+            .select("*")
+            .eq("activa", true)
+            .order("fecha_cierre", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+          if (proximaVentana) {
+            const fechaApertura = new Date(proximaVentana.fecha_cierre).toLocaleString("es-CL");
+            infoVentanaPrompt = `
+- La toma de pedidos está CERRADA actualmente.
+- Si el usuario te pide comprar, dile amablemente que estamos cerrados y que la próxima ventana de pedidos abre el: ${fechaApertura}.
+`;
+          } else {
+            infoVentanaPrompt = `
+- La toma de pedidos está CERRADA actualmente y no hay ventanas próximas programadas.
+- Si el usuario te pide comprar o hacer un pedido, dile amablemente que estamos cerrados por despacho y le avisaremos en cuanto abramos.
+`;
+          }
+        }
+
         promptSistema += `
 
 Reglas de Negocio Críticas (No negociables):
 1. El margen de ganancia actual para calcular los precios de venta a partir del precio de costo es del ${margenPercent}%.
 2. Si eres un administrador (esAdmin = true) y pides agregar un producto al catálogo dando únicamente el precio de costo, NO preguntes por el precio de venta. Llama inmediatamente a la función "crear_producto" omitiendo el parámetro "precio" (el sistema calculará automáticamente el precio de venta agregando el ${margenPercent}% de margen).
 3. Si el administrador proporciona explícitamente tanto el precio de costo como el precio de venta, llama a "crear_producto" pasando ambos parámetros.
+4. Información del estado de Ventanas de Pedidos y despachos:
+${infoVentanaPrompt}
 `;
 
         if (!cliente) {
@@ -498,6 +596,11 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
                       flete,
                       total_pagar,
                       created_at,
+                      ventana_id,
+                      ventanas_pedido (
+                        nombre,
+                        fecha_entrega
+                      ),
                       items_pedido (
                         cantidad,
                         precio_unitario,
@@ -528,9 +631,23 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
                           }).join("\n")
                         : "Sin items";
                       
+                      let entregaTexto = "No definida";
+                      if (p.ventanas_pedido) {
+                        const fechaEnt = new Date(p.ventanas_pedido.fecha_entrega);
+                        const diasSemana = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+                        const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+                        const diaNombre = diasSemana[fechaEnt.getDay()];
+                        const diaMes = fechaEnt.getDate();
+                        const mesNombre = meses[fechaEnt.getMonth()];
+                        const hora = fechaEnt.getHours();
+                        const jornada = hora < 13 ? "la mañana" : "la tarde";
+                        entregaTexto = `${diaNombre} ${diaMes} de ${mesNombre} durante ${jornada}`;
+                      }
+
                       return `Pedido #${idx + 1} (ID: ${p.id}):
 - Estado: ${p.estado}
-- Fecha: ${fecha}
+- Fecha Creación: ${fecha}
+- Fecha Estimada de Entrega: ${entregaTexto}
 - Total Neto: $${p.total_neto.toLocaleString("es-CL")}
 - Flete: $${p.flete.toLocaleString("es-CL")}
 - Total a Pagar: $${p.total_pagar.toLocaleString("es-CL")}

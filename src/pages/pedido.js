@@ -36,8 +36,42 @@ export default function PedidoPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [orderSummary, setOrderSummary] = useState(null);
+  const [ventanaActiva, setVentanaActiva] = useState(null);
+  const [pedidoPendiente, setPedidoPendiente] = useState(null);
 
   const supabase = createClient();
+
+  const formatFechaEntrega = (fechaStr) => {
+    if (!fechaStr) return "";
+    const fecha = new Date(fechaStr);
+    const ahora = new Date();
+    
+    const fechaClean = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+    const ahoraClean = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    
+    const diffTime = fechaClean - ahoraClean;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    
+    const diasSemana = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+    const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    
+    const diaNombre = diasSemana[fecha.getDay()];
+    const diaMes = fecha.getDate();
+    const mesNombre = meses[fecha.getMonth()];
+    
+    const hora = fecha.getHours();
+    const jornada = hora < 13 ? "la mañana" : "la tarde";
+    
+    const fechaFormateada = `${diaMes} de ${mesNombre}`;
+    
+    if (diffDays === 0) {
+      return `Hoy ${diaNombre} ${fechaFormateada} durante ${jornada}`;
+    } else if (diffDays === 1) {
+      return `Mañana ${diaNombre} ${fechaFormateada} durante ${jornada}`;
+    } else {
+      return `El ${diaNombre} ${fechaFormateada} durante ${jornada}`;
+    }
+  };
 
   // Lógica de normalización tolerante para resolver problemas de codificación de la base de datos
   const cleanKey = (str) => {
@@ -85,6 +119,8 @@ export default function PedidoPage() {
             throw new Error(data.message || "Token de sesión no válido.");
           }
           setClienteInfo(data.cliente);
+          setVentanaActiva(data.ventanaActiva || null);
+          setPedidoPendiente(data.pedidoPendiente || null);
         } else if (cliente_id) {
           // Retrocompatibilidad con cliente_id directo (ej: para pruebas locales/admin)
           const { data, error: cliErr } = await supabase
@@ -97,6 +133,33 @@ export default function PedidoPage() {
             setClienteInfo(data);
           } else {
             setClienteInfo({ id: cliente_id, nombre_tienda: "Cliente Piloto" });
+          }
+
+          // Carga directa de ventana activa y pedido pendiente
+          const nowISO = new Date().toISOString();
+          const { data: actVent, error: ventErr } = await supabase
+            .from("ventanas_pedido")
+            .select("*")
+            .eq("activa", true)
+            .gt("fecha_cierre", nowISO)
+            .order("fecha_cierre", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+          if (!ventErr && actVent) {
+            setVentanaActiva(actVent);
+
+            const { data: pedPend, error: pedErr } = await supabase
+              .from("pedidos")
+              .select("id, total_neto, flete, total_pagar")
+              .eq("cliente_id", cliente_id)
+              .eq("ventana_id", actVent.id)
+              .eq("estado", "Pendiente")
+              .maybeSingle();
+
+            if (!pedErr && pedPend) {
+              setPedidoPendiente(pedPend);
+            }
           }
         } else {
           throw new Error("Acceso denegado. Se requiere un enlace de sesión de WhatsApp válido.");
@@ -180,27 +243,6 @@ export default function PedidoPage() {
     }
   };
 
-  // --- Abrir WhatsApp ---
-  const abrirWhatsApp = () => {
-    if (!orderSummary) return;
-    const tel = "+56951875221";
-
-    const items = orderSummary.items
-      .map(
-        (i) =>
-          `• ${i.nombre} (${i.formato_venta}) x${i.cantidad} → $${i.totalItem.toLocaleString("es-CL")}`
-      )
-      .join("\n");
-
-    const msg = encodeURIComponent(
-      `🚚 *PEDIDO LUKEDELIVERY*\n\n${items}\n\n` +
-        `*Neto:* $${orderSummary.totalNeto.toLocaleString("es-CL")}\n` +
-        `*Flete:* $${orderSummary.flete.toLocaleString("es-CL")}\n` +
-        `*TOTAL:* $${orderSummary.totalPagar.toLocaleString("es-CL")}`
-    );
-
-    window.open(`https://wa.me/${tel}?text=${msg}`, "_blank");
-  };
 
   // --- Formatear precio CLP ---
   const fmt = (n) => `$${n.toLocaleString("es-CL")}`;
@@ -243,8 +285,49 @@ export default function PedidoPage() {
       </header>
 
       <main className="max-w-lg mx-auto px-4 pt-5 pb-36">
+        {/* ===== BANNER VENTANA ACTIVA ===== */}
+        {!tokenError && !loading && ventanaActiva && (
+          <div className="bg-brand/10 border border-brand/20 rounded-2xl p-4.5 mb-5 flex items-start gap-3 animate-fade-in shadow-sm">
+            <Truck className="h-5.5 w-5.5 text-brand shrink-0 mt-0.5" />
+            <div className="text-xs">
+              <p className="font-extrabold text-text-primary text-sm">
+                Ventana de Despacho: {ventanaActiva.nombre}
+              </p>
+              <p className="text-text-secondary mt-1 font-medium">
+                Recibes: <span className="font-black text-brand">{formatFechaEntrega(ventanaActiva.fecha_entrega)}</span>
+              </p>
+              <p className="text-[10px] text-text-dim mt-2 bg-bg-surface border border-border py-1 px-2.5 rounded-lg w-fit">
+                Cierre de pedidos: {new Date(ventanaActiva.fecha_cierre).toLocaleString("es-CL", {
+                  dateStyle: "short",
+                  timeStyle: "short"
+                })}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ===== VENTAS CERRADAS TEMPORALMENTE ===== */}
+        {!tokenError && !loading && !ventanaActiva && (
+          <div className="bg-bg-surface border-2 border-border rounded-[24px] p-8 text-center my-10 max-w-sm mx-auto shadow-xl flex flex-col items-center gap-5">
+            <div className="bg-brand/10 text-brand p-5 rounded-full w-fit">
+              <AlertTriangle className="h-10 w-10 animate-bounce text-brand" />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-text-primary mb-2">
+                Toma de Pedidos Cerrada
+              </h3>
+              <p className="text-sm text-text-secondary leading-relaxed">
+                En este momento nos encontramos en el proceso de compra mayorista y reparto en ruta para asegurar los mejores precios.
+              </p>
+            </div>
+            <div className="bg-bg-surface-2 p-4 rounded-2xl border border-border text-xs text-text-dim w-full font-semibold">
+              💡 Te notificaremos por WhatsApp en cuanto abramos la próxima ventana de pedidos.
+            </div>
+          </div>
+        )}
+
         {/* ===== ACCESSIBLE INFORMATION CARD (SENIOR-OPTIMIZED) ===== */}
-        {!tokenError && !loading && (
+        {!tokenError && !loading && ventanaActiva && (
           <div className="grid grid-cols-1 gap-4 mb-6 animate-fade-in">
             {/* Costo de Flete Card */}
             <div className="bg-bg-surface border-2 border-border rounded-2xl p-5 text-center flex flex-col items-center">
@@ -308,7 +391,7 @@ export default function PedidoPage() {
               No hay productos disponibles para tu tipo de negocio en este momento.
             </p>
           </div>
-        ) : !tokenError && (
+        ) : !tokenError && ventanaActiva && (
           /* ===== PRODUCT LIST AGROUPED BY CATEGORY ===== */
           <div className="space-y-8 animate-fade-in">
             {catsPermitidas.map((catName) => {
@@ -424,8 +507,9 @@ export default function PedidoPage() {
         )}
       </main>
 
+
       {/* ===== STICKY FOOTER: REGLA DEL FURGÓN ===== */}
-      {!tokenError && !loading && productosFiltrados.length > 0 && (
+      {!tokenError && !loading && productosFiltrados.length > 0 && ventanaActiva && (
         <footer className="fixed bottom-0 inset-x-0 bg-bg-surface/95 backdrop-blur-xl border-t border-border py-6 px-5 z-40">
           <div className="max-w-lg mx-auto">
             {/* Progress bar */}
@@ -452,6 +536,19 @@ export default function PedidoPage() {
               </div>
             </div>
 
+            {/* Advertencia de Fusión si ya tiene pedido Pendiente */}
+            {pedidoPendiente && total > 0 && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 mb-3 flex items-start gap-2.5 text-left">
+                <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                <div className="text-[11px] leading-snug">
+                  <p className="font-extrabold text-amber-500">⚠️ Pedido en Curso Detectado</p>
+                  <p className="text-text-secondary mt-0.5">
+                    Ya tienes un pedido activo en esta ventana. Estos productos se <strong>agregarán a tu pedido anterior</strong> cobrando un flete único.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Botón */}
             {cumpleMinimo ? (
               <button
@@ -465,7 +562,7 @@ export default function PedidoPage() {
                   </>
                 ) : (
                   <>
-                    <ShoppingCart className="h-6 w-6" /> Confirmar Pedido por WhatsApp
+                    <ShoppingCart className="h-6 w-6" /> {pedidoPendiente ? "Confirmar y Fusionar Pedido" : "Confirmar Pedido"}
                   </>
                 )}
               </button>
@@ -493,10 +590,12 @@ export default function PedidoPage() {
               <Check className="h-16 w-16" />
             </div>
             <h2 className="text-2xl font-black text-text-primary leading-tight">
-              ¡Pedido Realizado con Éxito!
+              {orderSummary?.fusionado ? "¡Pedido Fusionado con Éxito!" : "¡Pedido Realizado con Éxito!"}
             </h2>
             <p className="text-base text-text-secondary leading-relaxed">
-              Tu pedido se ha procesado correctamente. Ahora debes enviar el resumen por WhatsApp para coordinar el flete y la entrega.
+              {orderSummary?.fusionado
+                ? "Hemos añadido estos productos a tu pedido anterior para esta misma ventana de entrega. ¡Ahorraste el flete adicional!"
+                : "Tu pedido se ha registrado correctamente y ya está en nuestro sistema. No es necesario enviar nada por WhatsApp."}
             </p>
 
             {/* Financial Summary */}
@@ -516,17 +615,10 @@ export default function PedidoPage() {
             </div>
 
             <button
-              onClick={abrirWhatsApp}
-              className="w-full h-16 bg-[#25D366] hover:bg-[#20bd5a] active:scale-95 text-white text-lg font-black rounded-2xl flex items-center justify-center gap-3 transition-all cursor-pointer shadow-lg shadow-[#25D366]/25 uppercase tracking-wide"
-            >
-              📲 Enviar por WhatsApp
-            </button>
-            
-            <button
               onClick={() => setOrderSuccess(false)}
-              className="text-sm text-text-dim hover:text-text-secondary font-bold underline transition-colors cursor-pointer"
+              className="w-full h-16 bg-brand hover:bg-brand-hover active:scale-95 text-white text-lg font-black rounded-2xl flex items-center justify-center gap-3 transition-all cursor-pointer shadow-lg shadow-brand/25 uppercase tracking-wide"
             >
-              Crear otro pedido / Volver
+              Volver al Catálogo
             </button>
           </div>
         </div>

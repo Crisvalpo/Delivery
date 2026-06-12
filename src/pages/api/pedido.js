@@ -128,7 +128,33 @@ export default async function handler(req, res) {
       });
     }
 
-    // 5. Cálculo del flete
+    // 4.5. Validar ventana activa
+    const nowISO = new Date().toISOString();
+    const { data: ventanaActiva, error: ventanaErr } = await supabase
+      .from("ventanas_pedido")
+      .select("*")
+      .eq("activa", true)
+      .gt("fecha_cierre", nowISO)
+      .order("fecha_cierre", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (ventanaErr) {
+      console.error("[LukeDelivery API] Error al buscar ventana activa:", ventanaErr);
+      return res.status(500).json({
+        success: false,
+        message: "Error al validar la ventana de pedidos activa."
+      });
+    }
+
+    if (!ventanaActiva) {
+      return res.status(400).json({
+        success: false,
+        message: "La toma de pedidos está cerrada temporalmente para preparar el reparto. Volveremos a abrir pronto."
+      });
+    }
+
+    // 5. Cálculo del flete base para pedido inicial
     const flete = FLETE_BASE + RECARGO_PESADO * bultosPesados;
     const totalPagar = totalNeto + flete;
 
@@ -142,51 +168,135 @@ export default async function handler(req, res) {
 
     if (dbCliente) cliente = dbCliente;
 
-    // 6b. Persistencia del Pedido en Supabase
-    const { data: pedidoData, error: pedidoErr } = await supabase
+    // 6b. Buscar si existe un pedido pendiente para la misma ventana
+    const { data: pedidoExistente, error: checkErr } = await supabase
       .from("pedidos")
-      .insert({
-        cliente_id: finalClienteId,
-        total_neto: totalNeto,
-        flete,
-        total_pagar: totalPagar,
-        total_costo: totalCosto,
-        estado: "Pendiente",
-      })
-      .select("id")
-      .single();
+      .select("*")
+      .eq("cliente_id", finalClienteId)
+      .eq("ventana_id", ventanaActiva.id)
+      .eq("estado", "Pendiente")
+      .maybeSingle();
 
-    if (pedidoErr) {
-      console.error("[LukeDelivery API] Error al guardar cabecera de pedido:", pedidoErr);
+    if (checkErr) {
+      console.error("[LukeDelivery API] Error al verificar pedido existente:", checkErr);
       return res.status(500).json({
         success: false,
-        message: "Error al guardar el pedido en la base de datos.",
-        error: pedidoErr.message,
+        message: "Error al verificar pedido existente para esta ventana."
       });
     }
 
-    const pedidoId = pedidoData.id;
+    let pedidoId;
+    let esFusion = false;
 
-    // Insertar el detalle del pedido
-    const dbItems = items.map((it) => ({
-      pedido_id: pedidoId,
-      producto_id: it.id,
-      cantidad: it.cantidad,
-      precio_unitario: it.precioUnitario,
-      total_item: it.totalItem,
-    }));
+    if (pedidoExistente) {
+      pedidoId = pedidoExistente.id;
+      esFusion = true;
 
-    const { error: itemsErr } = await supabase
-      .from("items_pedido")
-      .insert(dbItems);
+      // Iterar e insertar o actualizar items_pedido
+      for (const it of items) {
+        const { data: itemExistente, error: itemCheckErr } = await supabase
+          .from("items_pedido")
+          .select("*")
+          .eq("pedido_id", pedidoId)
+          .eq("producto_id", it.id)
+          .maybeSingle();
 
-    if (itemsErr) {
-      console.error("[LukeDelivery API] Error al guardar ítems del pedido:", itemsErr);
-      return res.status(500).json({
-        success: false,
-        message: "Error al guardar los detalles del pedido en la base de datos.",
-        error: itemsErr.message,
-      });
+        if (itemCheckErr) {
+          console.error("[LukeDelivery API] Error al verificar item existente:", itemCheckErr);
+          return res.status(500).json({
+            success: false,
+            message: "Error al verificar ítems existentes en el pedido anterior."
+          });
+        }
+
+        if (itemExistente) {
+          const nuevaCant = itemExistente.cantidad + it.cantidad;
+          const { error: updErr } = await supabase
+            .from("items_pedido")
+            .update({
+              cantidad: nuevaCant,
+              total_item: it.precioUnitario * nuevaCant,
+              estado: "pendiente"
+            })
+            .eq("id", itemExistente.id);
+
+          if (updErr) {
+            console.error("[LukeDelivery API] Error al actualizar item_pedido:", updErr);
+            return res.status(500).json({
+              success: false,
+              message: "Error al actualizar la cantidad del ítem en la base de datos."
+            });
+          }
+        } else {
+          const { error: insErr } = await supabase
+            .from("items_pedido")
+            .insert({
+              pedido_id: pedidoId,
+              producto_id: it.id,
+              cantidad: it.cantidad,
+              precio_unitario: it.precioUnitario,
+              total_item: it.totalItem,
+              estado: "pendiente"
+            });
+
+          if (insErr) {
+            console.error("[LukeDelivery API] Error al insertar nuevo item_pedido:", insErr);
+            return res.status(500).json({
+              success: false,
+              message: "Error al insertar el nuevo ítem en la base de datos."
+            });
+          }
+        }
+      }
+    } else {
+      // Inserción normal de cabecera de pedido
+      const { data: pedidoData, error: pedidoErr } = await supabase
+        .from("pedidos")
+        .insert({
+          cliente_id: finalClienteId,
+          total_neto: totalNeto,
+          flete,
+          total_pagar: totalPagar,
+          total_costo: totalCosto,
+          estado: "Pendiente",
+          ventana_id: ventanaActiva.id
+        })
+        .select("id")
+        .single();
+
+      if (pedidoErr) {
+        console.error("[LukeDelivery API] Error al guardar cabecera de pedido:", pedidoErr);
+        return res.status(500).json({
+          success: false,
+          message: "Error al guardar el pedido en la base de datos.",
+          error: pedidoErr.message,
+        });
+      }
+
+      pedidoId = pedidoData.id;
+
+      // Insertar el detalle del pedido
+      const dbItems = items.map((it) => ({
+        pedido_id: pedidoId,
+        producto_id: it.id,
+        cantidad: it.cantidad,
+        precio_unitario: it.precioUnitario,
+        total_item: it.totalItem,
+        estado: "pendiente"
+      }));
+
+      const { error: itemsErr } = await supabase
+        .from("items_pedido")
+        .insert(dbItems);
+
+      if (itemsErr) {
+        console.error("[LukeDelivery API] Error al guardar ítems del pedido:", itemsErr);
+        return res.status(500).json({
+          success: false,
+          message: "Error al guardar los detalles del pedido en la base de datos.",
+          error: itemsErr.message,
+        });
+      }
     }
 
     // Si usamos un token y el pedido se guardó correctamente, marcarlo como usado
@@ -201,17 +311,65 @@ export default async function handler(req, res) {
       }
     }
 
+    // Consultar la cabecera y los ítems finales consolidados de la base de datos (con los cálculos del trigger)
+    const { data: pedidoActualizado, error: updPedidoErr } = await supabase
+      .from("pedidos")
+      .select("*")
+      .eq("id", pedidoId)
+      .single();
+
+    if (updPedidoErr) {
+      console.error("[LukeDelivery API] Error al consultar pedido consolidado:", updPedidoErr);
+      return res.status(500).json({
+        success: false,
+        message: "Error al consultar los totales consolidados del pedido."
+      });
+    }
+
+    const { data: itemsActualizados, error: updItemsErr } = await supabase
+      .from("items_pedido")
+      .select(`
+        id, 
+        producto_id, 
+        cantidad, 
+        precio_unitario, 
+        total_item, 
+        estado, 
+        productos (nombre, formato_venta, categoria_logistica)
+      `)
+      .eq("pedido_id", pedidoId);
+
+    if (updItemsErr) {
+      console.error("[LukeDelivery API] Error al consultar items consolidados:", updItemsErr);
+      return res.status(500).json({
+        success: false,
+        message: "Error al consultar los detalles consolidados del pedido."
+      });
+    }
+
+    // Mapear los items actualizados al formato que espera el payload
+    const itemsPayload = itemsActualizados.map((it) => ({
+      id: it.producto_id,
+      nombre: it.productos?.nombre || "Producto",
+      formato_venta: it.productos?.formato_venta || "",
+      precioUnitario: it.precio_unitario,
+      cantidad: it.cantidad,
+      totalItem: it.total_item,
+      categoria: it.productos?.categoria_logistica || "Normal",
+      estado: it.estado
+    }));
+
     // 7. Payload consolidado
     const payload = {
       pedido_id: pedidoId,
       timestamp: new Date().toISOString(),
       cliente,
-      items,
-      totalNeto,
-      totalCosto,
-      bultosPesados,
-      flete,
-      totalPagar,
+      items: itemsPayload,
+      totalNeto: pedidoActualizado.total_neto,
+      totalCosto: pedidoActualizado.total_costo,
+      flete: pedidoActualizado.flete,
+      totalPagar: pedidoActualizado.total_pagar,
+      fusionado: esFusion
     };
 
     console.log("[LukeDelivery API] Enviando a n8n:", JSON.stringify(payload, null, 2));
@@ -236,8 +394,6 @@ export default async function handler(req, res) {
       console.warn("[LukeDelivery API] n8n no disponible:", n8nErr.message);
     }
 
-    // Para el piloto: si n8n no está levantado, igual respondemos OK al cliente
-    // En producción cambiar esto a un error 502
     if (!n8nOk) {
       console.warn("[LukeDelivery API] Continuando sin confirmación de n8n (modo piloto)");
     }
@@ -245,7 +401,7 @@ export default async function handler(req, res) {
     // 9. Respuesta exitosa
     return res.status(200).json({
       success: true,
-      message: "Pedido calculado correctamente.",
+      message: esFusion ? "Pedido fusionado con éxito." : "Pedido creado con éxito.",
       ...payload,
     });
   } catch (err) {

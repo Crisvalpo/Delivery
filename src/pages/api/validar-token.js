@@ -62,6 +62,33 @@ export default async function handler(req, res) {
         .json({ success: false, message: "Cliente asociado no encontrado." });
     }
 
+    // 4.5. Buscar ventana activa de pedidos
+    const nowISO = new Date().toISOString();
+    const { data: ventanaActiva, error: ventanaErr } = await supabase
+      .from("ventanas_pedido")
+      .select("*")
+      .eq("activa", true)
+      .gt("fecha_cierre", nowISO)
+      .order("fecha_cierre", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    let pedidoPendiente = null;
+    if (ventanaActiva) {
+      // Buscar si el cliente tiene un pedido Pendiente en esta ventana
+      const { data: pedPend, error: pedErr } = await supabase
+        .from("pedidos")
+        .select("id, total_neto, flete, total_pagar")
+        .eq("cliente_id", sesion.cliente_id)
+        .eq("ventana_id", ventanaActiva.id)
+        .eq("estado", "Pendiente")
+        .maybeSingle();
+
+      if (!pedErr && pedPend) {
+        pedidoPendiente = pedPend;
+      }
+    }
+
     return res.status(200).json({
       success: true,
       cliente_id: sesion.cliente_id,
@@ -75,6 +102,8 @@ export default async function handler(req, res) {
         longitud: cliente.longitud,
         tipo_negocio: cliente.tipo_negocio,
       },
+      ventanaActiva,
+      pedidoPendiente,
     });
   } catch (err) {
     console.error("[validar-token] Error general:", err);

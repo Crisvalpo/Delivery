@@ -18,6 +18,8 @@ import {
   Trash,
   Bot,
   Users,
+  Calendar,
+  Clock,
 } from "lucide-react";
 
 // Coordenadas centrales de Placilla de Peñuelas
@@ -89,6 +91,18 @@ export default function AdminLukePage() {
   const [sendingInvite, setSendingInvite] = useState(false);
   const [inviteStatus, setInviteStatus] = useState(null);
 
+  // Estados de ventanas de pedido
+  const [ventanas, setVentanas] = useState([]);
+  const [showVentanasModal, setShowVentanasModal] = useState(false);
+  const [showVentanaForm, setShowVentanaForm] = useState(false);
+  const [editingVentana, setEditingVentana] = useState(null);
+  const [ventanaForm, setVentanaForm] = useState({
+    nombre: "",
+    fecha_cierre: "",
+    fecha_entrega: "",
+    activa: true
+  });
+
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const markersLayer = useRef(null);
@@ -153,9 +167,130 @@ export default function AdminLukePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const fetchVentanas = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin-ventanas");
+      const data = await res.json();
+      if (data.success) {
+        setVentanas(data.ventanas || []);
+      }
+    } catch (err) {
+      console.error("[AdminLuke] Error cargando ventanas:", err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchClientes();
-  }, [fetchClientes]);
+    fetchVentanas();
+  }, [fetchClientes, fetchVentanas]);
+
+  const handleOpenVentanaForm = (ventana = null) => {
+    if (ventana) {
+      setEditingVentana(ventana);
+      const fc = new Date(ventana.fecha_cierre);
+      const fe = new Date(ventana.fecha_entrega);
+      
+      const toLocalISO = (d) => {
+        const offset = d.getTimezoneOffset();
+        const localDate = new Date(d.getTime() - (offset*60*1000));
+        return localDate.toISOString().slice(0, 16);
+      };
+
+      setVentanaForm({
+        nombre: ventana.nombre,
+        fecha_cierre: toLocalISO(fc),
+        fecha_entrega: toLocalISO(fe),
+        activa: ventana.activa
+      });
+    } else {
+      setEditingVentana(null);
+      setVentanaForm({
+        nombre: "",
+        fecha_cierre: "",
+        fecha_entrega: "",
+        activa: true
+      });
+    }
+    setShowVentanaForm(true);
+  };
+
+  const handleSaveVentana = async (e) => {
+    e.preventDefault();
+    if (!ventanaForm.nombre.trim() || !ventanaForm.fecha_cierre || !ventanaForm.fecha_entrega) return;
+    
+    setSaving(true);
+    try {
+      const method = editingVentana ? "PUT" : "POST";
+      const payload = {
+        ...ventanaForm,
+        fecha_cierre: new Date(ventanaForm.fecha_cierre).toISOString(),
+        fecha_entrega: new Date(ventanaForm.fecha_entrega).toISOString(),
+      };
+      if (editingVentana) {
+        payload.id = editingVentana.id;
+      }
+
+      const res = await fetch("/api/admin-ventanas", {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Error al guardar ventana");
+      }
+
+      setShowVentanaForm(false);
+      await fetchVentanas();
+    } catch (err) {
+      console.error("[AdminLuke] Error guardando ventana:", err);
+      alert(err.message || "Error al guardar la ventana.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteVentana = async (id) => {
+    if (!confirm("¿Estás seguro de que quieres eliminar esta ventana?")) return;
+    try {
+      const res = await fetch(`/api/admin-ventanas?id=${id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Error al eliminar la ventana");
+      }
+      await fetchVentanas();
+    } catch (err) {
+      console.error("[AdminLuke] Error eliminando ventana:", err);
+      alert(err.message || "Error al eliminar. Revisa la consola.");
+    }
+  };
+
+  const handleToggleActivaVentana = async (ventana) => {
+    try {
+      const res = await fetch("/api/admin-ventanas", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: ventana.id,
+          nombre: ventana.nombre,
+          fecha_cierre: ventana.fecha_cierre,
+          fecha_entrega: ventana.fecha_entrega,
+          activa: !ventana.activa
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Error al actualizar la ventana");
+      }
+      await fetchVentanas();
+    } catch (err) {
+      console.error("[AdminLuke] Error toggling ventana activa:", err);
+      alert(err.message);
+    }
+  };
 
   const handleSendInvitation = async (e) => {
     e.preventDefault();
@@ -764,6 +899,16 @@ export default function AdminLukePage() {
           >
             <Users className="h-3.5 w-3.5 text-emerald-450" />
             <span>Gestionar Personal</span>
+          </button>
+
+          {/* Botón Ventanas de Pedido */}
+          <button
+            onClick={() => setShowVentanasModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
+            title="Gestión de Ventanas de Tiempo y Reparto"
+          >
+            <Calendar className="h-3.5 w-3.5 text-amber-500" />
+            <span>Ventanas de Pedido</span>
           </button>
 
           {/* Leyenda de prioridad */}
@@ -1662,6 +1807,225 @@ export default function AdminLukePage() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL GESTION VENTANAS ===== */}
+      {showVentanasModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowVentanasModal(false)}
+          />
+          <div className="relative bg-bg-surface border-2 border-border rounded-2xl w-full sm:max-w-3xl max-h-[90vh] sm:max-h-[80vh] flex flex-col overflow-hidden shadow-2xl animate-fade-in z-[9999]">
+            <div className="p-5 border-b border-border flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-text-primary flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-amber-500" />
+                  Ventanas de Pedido B2B
+                </h2>
+                <p className="text-xs text-text-dim mt-0.5">
+                  Programa los cierres de toma de pedidos y estimación automática de llegada
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => handleOpenVentanaForm(null)}
+                  className="bg-brand hover:bg-brand-hover text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Nueva Ventana</span>
+                </button>
+                <button
+                  onClick={() => setShowVentanasModal(false)}
+                  className="p-1.5 rounded-lg bg-bg-surface-2 border border-border text-text-dim hover:text-text-primary transition-colors cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5">
+              {ventanas.length === 0 ? (
+                <div className="h-48 flex flex-col items-center justify-center text-center text-text-dim">
+                  <Calendar className="h-10 w-10 text-border mb-2 stroke-[1.5]" />
+                  <p className="text-sm font-semibold">No hay ventanas programadas</p>
+                  <p className="text-xs mt-0.5">Haz clic en "Nueva Ventana" para crear la primera.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-text-secondary border-collapse">
+                    <thead>
+                      <tr className="border-b border-border text-text-dim uppercase tracking-wider text-[9px] font-bold">
+                        <th className="pb-3 pl-2">Nombre</th>
+                        <th className="pb-3">Cierre Pedidos</th>
+                        <th className="pb-3">Entrega Despacho</th>
+                        <th className="pb-3 text-center">Estado</th>
+                        <th className="pb-3 text-right pr-2">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {ventanas.map((v) => {
+                        const esCerrada = new Date(v.fecha_cierre) <= new Date();
+                        return (
+                          <tr key={v.id} className="hover:bg-bg-surface-2/30 transition-colors">
+                            <td className="py-3 pl-2 font-semibold text-text-primary">{v.nombre}</td>
+                            <td className="py-3 text-text-secondary">
+                              {new Date(v.fecha_cierre).toLocaleString("es-CL", {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              })}
+                            </td>
+                            <td className="py-3 text-text-secondary">
+                              {new Date(v.fecha_entrega).toLocaleString("es-CL", {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              })}
+                            </td>
+                            <td className="py-3 text-center">
+                              <button
+                                onClick={() => handleToggleActivaVentana(v)}
+                                className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                  v.activa && !esCerrada
+                                    ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                                    : "bg-red-500/10 text-red-400 border border-red-500/20"
+                                }`}
+                              >
+                                {v.activa && !esCerrada ? "Activa" : esCerrada ? "Cerrada" : "Inactiva"}
+                              </button>
+                            </td>
+                            <td className="py-3 text-right pr-2">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => handleOpenVentanaForm(v)}
+                                  className="p-1.5 rounded-lg bg-bg-surface border border-border text-text-secondary hover:text-brand hover:border-brand/40 transition-colors cursor-pointer inline-flex items-center justify-center"
+                                  title="Editar ventana"
+                                >
+                                  <Edit className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteVentana(v.id)}
+                                  className="p-1.5 rounded-lg bg-bg-surface border border-border text-red-400 hover:text-red-300 hover:border-red-500/40 transition-colors cursor-pointer inline-flex items-center justify-center"
+                                  title="Eliminar ventana"
+                                >
+                                  <Trash className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL FORMULARIO VENTANA ===== */}
+      {showVentanaForm && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/85 backdrop-blur-sm"
+            onClick={() => !saving && setShowVentanaForm(false)}
+          />
+          <div className="relative bg-bg-surface border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl animate-scale-up z-[10000]">
+            <button
+              onClick={() => setShowVentanaForm(false)}
+              disabled={saving}
+              className="absolute top-4 right-4 text-text-dim hover:text-text-primary transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <h3 className="text-base font-bold text-text-primary mb-5 flex items-center gap-2">
+              <Calendar className="h-4.5 w-4.5 text-brand" />
+              {editingVentana ? "Editar Ventana" : "Nueva Ventana de Pedido"}
+            </h3>
+
+            <form onSubmit={handleSaveVentana} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                  Nombre descriptivo *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: Despacho Viernes Mañana"
+                  value={ventanaForm.nombre}
+                  onChange={(e) => setVentanaForm({ ...ventanaForm, nombre: e.target.value })}
+                  className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                  Fecha y Hora de Cierre *
+                </label>
+                <input
+                  type="datetime-local"
+                  required
+                  value={ventanaForm.fecha_cierre}
+                  onChange={(e) => setVentanaForm({ ...ventanaForm, fecha_cierre: e.target.value })}
+                  className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary focus:border-brand/50 focus:outline-none transition-colors"
+                />
+                <span className="text-[10px] text-text-dim mt-1.5 block leading-tight">
+                  Cuándo se congelará el carrito para los almaceneros.
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                  Fecha y Hora Estimada de Entrega *
+                </label>
+                <input
+                  type="datetime-local"
+                  required
+                  value={ventanaForm.fecha_entrega}
+                  onChange={(e) => setVentanaForm({ ...ventanaForm, fecha_entrega: e.target.value })}
+                  className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary focus:border-brand/50 focus:outline-none transition-colors"
+                />
+                <span className="text-[10px] text-text-dim mt-1.5 block leading-tight">
+                  Cuándo iniciará la ruta de despacho física (se usará para calcular la fecha de llegada automática).
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between bg-bg-surface-2 border border-border rounded-xl p-3">
+                <span className="text-xs font-semibold text-text-secondary">Ventana Activa</span>
+                <button
+                  type="button"
+                  onClick={() => setVentanaForm({ ...ventanaForm, activa: !ventanaForm.activa })}
+                  className={`relative inline-flex h-5.5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    ventanaForm.activa ? "bg-brand" : "bg-bg-surface-3"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      ventanaForm.activa ? "translate-x-4.5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                disabled={saving || !ventanaForm.nombre.trim() || !ventanaForm.fecha_cierre || !ventanaForm.fecha_entrega}
+                className="w-full bg-brand hover:bg-brand-hover disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer mt-4 text-xs"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Guardando...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-3.5 w-3.5" /> Guardar Ventana
+                  </>
+                )}
+              </button>
+            </form>
           </div>
         </div>
       )}
