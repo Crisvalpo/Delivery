@@ -22,6 +22,7 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  ShoppingCart,
 } from "lucide-react";
 import AdminAuthGuard from "@/components/AdminAuthGuard";
 
@@ -908,10 +909,20 @@ export default function AdminLukePage() {
           <button
             onClick={() => setShowConsolidateModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
-            title="Ver pedido consolidado de mercadería"
+            title="Ver pedido consolidado de mercancía"
           >
             <ClipboardList className="h-3.5 w-3.5 text-brand" />
             <span>Consolidado</span>
+          </button>
+
+          {/* Botón Lista de Compras (comprador en terreno) */}
+          <button
+            onClick={() => window.open('/compras', '_blank')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/50"
+            title="Abrir lista de compras para el comprador en terreno"
+          >
+            <ShoppingCart className="h-3.5 w-3.5" />
+            <span>Lista Compras</span>
           </button>
 
           {/* Botón Invitar eliminado: flujo inbound only — el almacenero contacta a Jaime primero */}
@@ -977,10 +988,24 @@ export default function AdminLukePage() {
       <div className="flex-1 relative">
         <div ref={mapRef} className="h-full w-full" />
 
-        {/* Hint overlay */}
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 bg-bg-surface/90 backdrop-blur-md border border-border rounded-full py-2 px-4 text-xs text-text-secondary z-20 pointer-events-none flex items-center gap-1.5">
-          <Plus className="h-3 w-3 text-brand" />
-          Toca el mapa para registrar un nuevo almacén
+        {/* Hint overlay - cambia según modo activo */}
+        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 bg-bg-surface/90 backdrop-blur-md border border-border rounded-full py-2 px-4 text-xs z-20 pointer-events-none flex items-center gap-1.5">
+          {modoCrear ? (
+            <>
+              <MapPin className="h-3 w-3 text-emerald-400 animate-bounce" />
+              <span className="text-emerald-400 font-bold">Haz clic en el mapa para posicionar el nuevo almacén</span>
+            </>
+          ) : modoEdicion ? (
+            <>
+              <MapPin className="h-3 w-3 text-amber-400" />
+              <span className="text-amber-400 font-semibold">Modo Ajuste: arrastra los pines para reubicar almacenes</span>
+            </>
+          ) : (
+            <>
+              <Plus className="h-3 w-3 text-text-secondary" />
+              <span className="text-text-secondary">Activa "Nuevo Almacén" para agregar un local en el mapa</span>
+            </>
+          )}
         </div>
       </div>
 
