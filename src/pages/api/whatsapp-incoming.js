@@ -235,6 +235,14 @@ Reglas de Negocio Críticas (No negociables):
               },
               required: ["motivo"]
             }
+          },
+          {
+            name: "consultar_pedidos_cliente",
+            description: "Recupera la lista de pedidos activos y recientes realizados por el usuario actual (almacenero) para informarle sobre su estado (Pendiente, Preparando, En Ruta, Entregado, Cancelado), el total a pagar, el flete, y el detalle de los productos. No requiere parámetros.",
+            parameters: {
+              type: "OBJECT",
+              properties: {}
+            }
           }
         ];
 
@@ -458,6 +466,61 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
                 dbResult = error
                   ? `Error al silenciar: ${error.message}`
                   : `Éxito: El usuario ha sido silenciado en Supabase hasta ${cincoHorasMas} debido a: ${motivo}. Debes avisarle claramente al usuario en tu respuesta que debido a que sus consultas se desvían de las compras, tu sistema se pausará y no podrás responderle en las próximas 5 horas.`;
+              }
+              else if (name === "consultar_pedidos_cliente") {
+                if (!cliente) {
+                  dbResult = "Error: El usuario actual no está registrado como cliente en el sistema. Debe registrarse primero.";
+                } else {
+                  const { data: pedidos, error: errPedidos } = await supabase
+                    .from("pedidos")
+                    .select(`
+                      id,
+                      estado,
+                      total_neto,
+                      flete,
+                      total_pagar,
+                      created_at,
+                      items_pedido (
+                        cantidad,
+                        precio_unitario,
+                        estado,
+                        productos (
+                          nombre,
+                          formato_venta
+                        )
+                      )
+                    `)
+                    .eq("cliente_id", cliente.id)
+                    .order("created_at", { ascending: false })
+                    .limit(5);
+
+                  if (errPedidos) {
+                    dbResult = `Error consultando pedidos: ${errPedidos.message}`;
+                  } else if (!pedidos || pedidos.length === 0) {
+                    dbResult = "No tienes ningún pedido registrado actualmente en el sistema.";
+                  } else {
+                    dbResult = pedidos.map((p, idx) => {
+                      const fecha = new Date(p.created_at).toLocaleDateString("es-CL", { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                      const itemsTexto = p.items_pedido && p.items_pedido.length > 0
+                        ? p.items_pedido.map(it => {
+                            const prodNombre = it.productos ? it.productos.nombre : "Producto";
+                            const prodFormato = it.productos ? it.productos.formato_venta : "";
+                            const estadoText = it.estado === 'no_disponible' ? '(Sin stock - NO enviado)' : '';
+                            return `- ${it.cantidad}x ${prodNombre} (${prodFormato}) ${estadoText}`;
+                          }).join("\n")
+                        : "Sin items";
+                      
+                      return `Pedido #${idx + 1} (ID: ${p.id}):
+- Estado: ${p.estado}
+- Fecha: ${fecha}
+- Total Neto: $${p.total_neto.toLocaleString("es-CL")}
+- Flete: $${p.flete.toLocaleString("es-CL")}
+- Total a Pagar: $${p.total_pagar.toLocaleString("es-CL")}
+- Items:
+${itemsTexto}`;
+                    }).join("\n\n");
+                  }
+                }
               }
               else if (name === "actualizar_precio_producto") {
                 const { nombre_producto, nuevo_precio } = args;
