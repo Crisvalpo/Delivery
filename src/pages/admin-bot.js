@@ -13,6 +13,7 @@ import {
   CheckCircle,
   AlertCircle 
 } from "lucide-react";
+import AdminAuthGuard from "@/components/AdminAuthGuard";
 
 export default function AdminBotPage() {
   const [prompt, setPrompt] = useState("");
@@ -106,7 +107,8 @@ export default function AdminBotPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-emerald-500/30 selection:text-emerald-300">
+    <AdminAuthGuard>
+      <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-emerald-500/30 selection:text-emerald-300">
       <Head>
         <title>Ajustes del Asistente B2B · LukeDelivery</title>
       </Head>
@@ -309,6 +311,7 @@ export default function AdminBotPage() {
           </div>
         )}
       </main>
-    </div>
+      </div>
+    </AdminAuthGuard>
   );
 }

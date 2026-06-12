@@ -20,6 +20,7 @@ import {
   UserX,
   Phone
 } from "lucide-react";
+import AdminAuthGuard from "@/components/AdminAuthGuard";
 
 export default function AdminTrabajadoresPage() {
   const [trabajadores, setTrabajadores] = useState([]);
@@ -201,7 +202,8 @@ export default function AdminTrabajadoresPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-emerald-500/30 selection:text-emerald-300">
+    <AdminAuthGuard>
+      <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-emerald-500/30 selection:text-emerald-300">
       <Head>
         <title>Gestión de Personal B2B · LukeDelivery</title>
       </Head>
@@ -483,6 +485,7 @@ export default function AdminTrabajadoresPage() {
 
         </div>
       </main>
-    </div>
+      </div>
+    </AdminAuthGuard>
   );
 }

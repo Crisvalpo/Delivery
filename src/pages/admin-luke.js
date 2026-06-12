@@ -19,6 +19,7 @@ import {
   Calendar,
   Clock,
 } from "lucide-react";
+import AdminAuthGuard from "@/components/AdminAuthGuard";
 
 // Coordenadas centrales de Placilla de Peñuelas
 const CENTRO_PLACILLA = [-33.1015, -71.5580];
@@ -762,7 +763,8 @@ export default function AdminLukePage() {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-bg-app overflow-hidden">
+    <AdminAuthGuard>
+      <div className="h-screen w-screen flex flex-col bg-bg-app overflow-hidden">
       <Head>
         <title>Panel Admin | LukeDelivery</title>
         <meta
@@ -1914,6 +1916,7 @@ export default function AdminLukePage() {
           animation: scale-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
       `}</style>
-    </div>
+      </div>
+    </AdminAuthGuard>
   );
 }
