@@ -50,12 +50,6 @@ export default async function handler(req, res) {
           .json({ success: false, message: "Token de sesión no válido." });
       }
 
-      if (sesion.usado) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Este enlace ya fue utilizado para realizar un pedido." });
-      }
-
       const expiraAt = new Date(sesion.expira_at);
       if (expiraAt < new Date()) {
         return res
@@ -299,17 +293,8 @@ export default async function handler(req, res) {
       }
     }
 
-    // Si usamos un token y el pedido se guardó correctamente, marcarlo como usado
-    if (token) {
-      const { error: tokenUpdateErr } = await supabase
-        .from("sesiones_formulario")
-        .update({ usado: true })
-        .eq("token", token);
-
-      if (tokenUpdateErr) {
-        console.error("[LukeDelivery API] Error al marcar token como usado:", tokenUpdateErr);
-      }
-    }
+    // Ya no marcamos el token como usado para permitir que el almacenero regrese al catálogo
+    // y agregue más ítems dentro de las 2 horas de vigencia del token (fusión dinámica).
 
     // Consultar la cabecera y los ítems finales consolidados de la base de datos (con los cálculos del trigger)
     const { data: pedidoActualizado, error: updPedidoErr } = await supabase

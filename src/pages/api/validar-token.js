@@ -33,12 +33,6 @@ export default async function handler(req, res) {
         .json({ success: false, message: "Enlace no válido. Solicita uno nuevo." });
     }
 
-    // 2. Verificar si ya fue utilizado
-    if (sesion.usado) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Este enlace ya fue utilizado para realizar un pedido." });
-    }
 
     // 3. Verificar si expiró
     const expiraAt = new Date(sesion.expira_at);
