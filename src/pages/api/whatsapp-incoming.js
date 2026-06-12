@@ -563,211 +563,225 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
           }
 
           const geminiData = await geminiRes.json();
-          const candidatePart = geminiData.candidates?.[0]?.content?.parts?.[0];
           const candidateParts = geminiData.candidates?.[0]?.content?.parts || [];
+          const functionCalls = candidateParts.filter(p => p.functionCall);
 
-          if (candidatePart?.functionCall) {
-            const { name, args } = candidatePart.functionCall;
-            let dbResult = "";
-            console.log(`[whatsapp-incoming] Interceptada llamada a funcion: ${name} con args:`, args);
+          if (functionCalls.length > 0) {
+            console.log(`[whatsapp-incoming] Se detectaron ${functionCalls.length} llamadas a funciones en paralelo.`);
+            const functionResponses = [];
+            const dbResultsSummary = [];
 
-            try {
-              if (name === "silenciar_usuario_por_desviacion") {
-                const { motivo } = args;
-                const cincoHorasMas = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
-                
-                // Guardar bloqueo de forma universal en whatsapp_bloqueos (registrados y no registrados)
-                const { error: errorBloqueo } = await supabase
-                  .from("whatsapp_bloqueos")
-                  .upsert({
-                    whatsapp: phoneClean,
-                    silenciado_hasta: cincoHorasMas,
-                    motivo: motivo
-                  });
+            for (const part of functionCalls) {
+              const { name, args } = part.functionCall;
+              let dbResult = "";
+              console.log(`[whatsapp-incoming] Procesando llamada a función: ${name} con args:`, args);
 
-                // Por retrocompatibilidad, si es un cliente registrado, también actualizamos su campo en clientes
-                if (cliente) {
-                  await supabase
-                    .from("clientes")
-                    .update({ bot_silenciado_hasta: cincoHorasMas })
-                    .eq("id", cliente.id);
+              try {
+                if (name === "silenciar_usuario_por_desviacion") {
+                  const { motivo } = args;
+                  const cincoHorasMas = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
+                  
+                  // Guardar bloqueo de forma universal en whatsapp_bloqueos (registrados y no registrados)
+                  const { error: errorBloqueo } = await supabase
+                    .from("whatsapp_bloqueos")
+                    .upsert({
+                      whatsapp: phoneClean,
+                      silenciado_hasta: cincoHorasMas,
+                      motivo: motivo
+                    });
+
+                  // Por retrocompatibilidad, si es un cliente registrado, también actualizamos su campo en clientes
+                  if (cliente) {
+                    await supabase
+                      .from("clientes")
+                      .update({ bot_silenciado_hasta: cincoHorasMas })
+                      .eq("id", cliente.id);
+                  }
+
+                  dbResult = errorBloqueo
+                    ? `Error al silenciar en bloqueos: ${errorBloqueo.message}`
+                    : `Éxito: El usuario ha sido bloqueado en Supabase hasta ${cincoHorasMas} debido a: ${motivo}. Debes avisarle claramente al usuario en tu respuesta que debido a que sus consultas se desvían de las compras, tu sistema se pausará y no podrás responderle en las próximas 5 horas.`;
                 }
-
-                dbResult = errorBloqueo
-                  ? `Error al silenciar en bloqueos: ${errorBloqueo.message}`
-                  : `Éxito: El usuario ha sido bloqueado en Supabase hasta ${cincoHorasMas} debido a: ${motivo}. Debes avisarle claramente al usuario en tu respuesta que debido a que sus consultas se desvían de las compras, tu sistema se pausará y no podrás responderle en las próximas 5 horas.`;
-              }
-              else if (name === "consultar_pedidos_cliente") {
-                if (!cliente) {
-                  dbResult = "Error: El usuario actual no está registrado como cliente en el sistema. Debe registrarse primero.";
-                } else {
-                  const { data: pedidos, error: errPedidos } = await supabase
-                    .from("pedidos")
-                    .select(`
-                      id,
-                      estado,
-                      total_neto,
-                      flete,
-                      total_pagar,
-                      created_at,
-                      ventana_id,
-                      ventanas_pedido (
-                        nombre,
-                        fecha_entrega
-                      ),
-                      items_pedido (
-                        cantidad,
-                        precio_unitario,
-                        estado,
-                        productos (
-                          nombre,
-                          formato_venta
-                        )
-                      )
-                    `)
-                    .eq("cliente_id", cliente.id)
-                    .order("created_at", { ascending: false })
-                    .limit(5);
-
-                  if (errPedidos) {
-                    dbResult = `Error consultando pedidos: ${errPedidos.message}`;
-                  } else if (!pedidos || pedidos.length === 0) {
-                    dbResult = "No tienes ningún pedido registrado actualmente en el sistema.";
+                else if (name === "consultar_pedidos_cliente") {
+                  if (!cliente) {
+                    dbResult = "Error: El usuario actual no está registrado como cliente en el sistema. Debe registrarse primero.";
                   } else {
-                    dbResult = pedidos.map((p, idx) => {
-                      const fecha = new Date(p.created_at).toLocaleDateString("es-CL", { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-                      const itemsTexto = p.items_pedido && p.items_pedido.length > 0
-                        ? p.items_pedido.map(it => {
-                            const prodNombre = it.productos ? it.productos.nombre : "Producto";
-                            const prodFormato = it.productos ? it.productos.formato_venta : "";
-                            const estadoText = it.estado === 'no_disponible' ? '(Sin stock - NO enviado)' : '';
-                            return `- ${it.cantidad}x ${prodNombre} (${prodFormato}) ${estadoText}`;
-                          }).join("\n")
-                        : "Sin items";
-                      
-                      let entregaTexto = "No definida";
-                      if (p.ventanas_pedido) {
-                        const fechaEnt = new Date(p.ventanas_pedido.fecha_entrega);
-                        const diasSemana = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-                        const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-                        const diaNombre = diasSemana[fechaEnt.getDay()];
-                        const diaMes = fechaEnt.getDate();
-                        const mesNombre = meses[fechaEnt.getMonth()];
-                        const hora = fechaEnt.getHours();
-                        const jornada = hora < 13 ? "la mañana" : "la tarde";
-                        entregaTexto = `${diaNombre} ${diaMes} de ${mesNombre} durante ${jornada}`;
-                      }
+                    const { data: pedidos, error: errPedidos } = await supabase
+                      .from("pedidos")
+                      .select(`
+                        id,
+                        estado,
+                        total_neto,
+                        flete,
+                        total_pagar,
+                        created_at,
+                        ventana_id,
+                        ventanas_pedido (
+                          nombre,
+                          fecha_entrega
+                        ),
+                        items_pedido (
+                          cantidad,
+                          precio_unitario,
+                          estado,
+                          productos (
+                            nombre,
+                            formato_venta
+                          )
+                        )
+                      `)
+                      .eq("cliente_id", cliente.id)
+                      .order("created_at", { ascending: false })
+                      .limit(5);
 
-                      return `Pedido #${idx + 1} (ID: ${p.id}):
-- Estado: ${p.estado}
-- Fecha Creación: ${fecha}
-- Fecha Estimada de Entrega: ${entregaTexto}
-- Total Neto: $${p.total_neto.toLocaleString("es-CL")}
-- Flete: $${p.flete.toLocaleString("es-CL")}
-- Total a Pagar: $${p.total_pagar.toLocaleString("es-CL")}
-- Items:
-${itemsTexto}`;
-                    }).join("\n\n");
+                    if (errPedidos) {
+                      dbResult = `Error consultando pedidos: ${errPedidos.message}`;
+                    } else if (!pedidos || pedidos.length === 0) {
+                      dbResult = "No tienes ningún pedido registrado actualmente en el sistema.";
+                    } else {
+                      dbResult = pedidos.map((p, idx) => {
+                        const fecha = new Date(p.created_at).toLocaleDateString("es-CL", { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                        const itemsTexto = p.items_pedido && p.items_pedido.length > 0
+                          ? p.items_pedido.map(it => {
+                              const prodNombre = it.productos ? it.productos.nombre : "Producto";
+                              const prodFormato = it.productos ? it.productos.formato_venta : "";
+                              const estadoText = it.estado === 'no_disponible' ? '(Sin stock - NO enviado)' : '';
+                              return `- ${it.cantidad}x ${prodNombre} (${prodFormato}) ${estadoText}`;
+                            }).join("\n")
+                          : "Sin items";
+                        
+                        let entregaTexto = "No definida";
+                        if (p.ventanas_pedido) {
+                          const fechaEnt = new Date(p.ventanas_pedido.fecha_entrega);
+                          const diasSemana = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+                          const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+                          const diaNombre = diasSemana[fechaEnt.getDay()];
+                          const diaMes = fechaEnt.getDate();
+                          const mesNombre = meses[fechaEnt.getMonth()];
+                          const hora = fechaEnt.getHours();
+                          const jornada = hora < 13 ? "la mañana" : "la tarde";
+                          entregaTexto = `${diaNombre} ${diaMes} de ${mesNombre} durante ${jornada}`;
+                        }
+
+                        return `Pedido #${idx + 1} (ID: ${p.id}):
+  - Estado: ${p.estado}
+  - Fecha Creación: ${fecha}
+  - Fecha Estimada de Entrega: ${entregaTexto}
+  - Total Neto: $${p.total_neto.toLocaleString("es-CL")}
+  - Flete: $${p.flete.toLocaleString("es-CL")}
+  - Total a Pagar: $${p.total_pagar.toLocaleString("es-CL")}
+  - Items:
+  ${itemsTexto}`;
+                      }).join("\n\n");
+                    }
                   }
                 }
-              }
-              else if (name === "actualizar_precio_producto") {
-                const { nombre_producto, nuevo_precio } = args;
-                const { error } = await supabase
-                  .from("productos")
-                  .update({ precio: nuevo_precio })
-                  .ilike("nombre", `%${nombre_producto}%`);
-                
-                dbResult = error 
-                  ? `Error al actualizar: ${error.message}` 
-                  : `Éxito: El precio del producto que coincide con "${nombre_producto}" ha sido actualizado a $${nuevo_precio.toLocaleString("es-CL")} con éxito.`;
-              } 
-              else if (name === "crear_producto") {
-                const { nombre, formato_venta, precio, precio_costo, categoria_logistica, url_imagen_retail } = args;
-                
-                let precioVentaFinal = precio;
-                let margenAplicado = null;
-
-                if (!precioVentaFinal) {
-                  const margenConfig = dbConfigs ? dbConfigs.find(c => c.clave === "margen_ganancia") : null;
-                  const margenPercent = margenConfig ? parseFloat(margenConfig.valor) : 20; // 20% default
-                  margenAplicado = margenPercent;
-                  precioVentaFinal = Math.round(precio_costo * (1 + margenPercent / 100));
-                }
-
-                const finalImgUrl = url_imagen_retail && url_imagen_retail.trim()
-                  ? url_imagen_retail.trim()
-                  : "https://cdn.pesco.cl/wp-content/uploads/2021/03/producto_sin_imagen.png";
-
-                const { error } = await supabase
-                  .from("productos")
-                  .insert([{
-                    nombre,
-                    formato_venta,
-                    precio: precioVentaFinal,
-                    precio_costo,
-                    categoria_logistica,
-                    url_imagen_retail: finalImgUrl,
-                    disponible: true,
-                    activo: true
-                  }]);
-
-                dbResult = error
-                  ? `Error al crear: ${error.message}`
-                  : `Éxito: El producto "${nombre}" (${formato_venta}) ha sido agregado al catálogo con un precio de costo de $${precio_costo.toLocaleString("es-CL")} y precio de venta de $${precioVentaFinal.toLocaleString("es-CL")}${margenAplicado !== null ? ` (calculado automáticamente agregando un ${margenAplicado}% de margen de ganancia configurado en la app)` : ""}. ${!url_imagen_retail ? "Se ha asignado una imagen por defecto, recuerda que el usuario puede proporcionar una URL para actualizarla." : ""}`;
-              }
-              else if (name === "cambiar_disponibilidad_producto") {
-                const { nombre_producto, disponible } = args;
-                const { error } = await supabase
-                  .from("productos")
-                  .update({ disponible: disponible })
-                  .ilike("nombre", `%${nombre_producto}%`);
-
-                dbResult = error
-                  ? `Error al cambiar disponibilidad: ${error.message}`
-                  : `Éxito: La disponibilidad del producto que coincide con "${nombre_producto}" ha sido cambiada a ${disponible ? "Disponible" : "Agotado/Deshabilitado"}.`;
-              }
-              else if (name === "eliminar_producto") {
-                const { nombre_producto } = args;
-                const { error } = await supabase
-                  .from("productos")
-                  .update({ activo: false })
-                  .ilike("nombre", `%${nombre_producto}%`);
-
-                dbResult = error
-                  ? `Error al eliminar: ${error.message}`
-                  : `Éxito: El producto que coincide con "${nombre_producto}" ha sido desactivado del catálogo con éxito.`;
-              }
-              else if (name === "actualizar_detalles_producto") {
-                const { nombre_producto, nuevo_nombre, nuevo_formato_venta, nueva_url_imagen, nueva_categoria_logistica } = args;
-                
-                const updates = {};
-                if (nuevo_nombre !== undefined) updates.nombre = nuevo_nombre;
-                if (nuevo_formato_venta !== undefined) updates.formato_venta = nuevo_formato_venta;
-                if (nueva_url_imagen !== undefined) updates.url_imagen_retail = nueva_url_imagen;
-                if (nueva_categoria_logistica !== undefined) updates.categoria_logistica = nueva_categoria_logistica;
-
-                if (Object.keys(updates).length === 0) {
-                  dbResult = "Error: No se especificaron campos válidos para actualizar.";
-                } else {
+                else if (name === "actualizar_precio_producto") {
+                  const { nombre_producto, nuevo_precio } = args;
                   const { error } = await supabase
                     .from("productos")
-                    .update(updates)
+                    .update({ precio: nuevo_precio })
+                    .ilike("nombre", `%${nombre_producto}%`);
+                  
+                  dbResult = error 
+                    ? `Error al actualizar: ${error.message}` 
+                    : `Éxito: El precio del producto que coincide con "${nombre_producto}" ha sido actualizado a $${nuevo_precio.toLocaleString("es-CL")} con éxito.`;
+                } 
+                else if (name === "crear_producto") {
+                  const { nombre, formato_venta, precio, precio_costo, categoria_logistica, url_imagen_retail } = args;
+                  
+                  let precioVentaFinal = precio;
+                  let margenAplicado = null;
+
+                  if (!precioVentaFinal) {
+                    const margenConfig = dbConfigs ? dbConfigs.find(c => c.clave === "margen_ganancia") : null;
+                    const margenPercent = margenConfig ? parseFloat(margenConfig.valor) : 20; // 20% default
+                    margenAplicado = margenPercent;
+                    precioVentaFinal = Math.round(precio_costo * (1 + margenPercent / 100));
+                  }
+
+                  const finalImgUrl = url_imagen_retail && url_imagen_retail.trim()
+                    ? url_imagen_retail.trim()
+                    : "https://cdn.pesco.cl/wp-content/uploads/2021/03/producto_sin_imagen.png";
+
+                  const { error } = await supabase
+                    .from("productos")
+                    .insert([{
+                      nombre,
+                      formato_venta,
+                      precio: precioVentaFinal,
+                      precio_costo,
+                      categoria_logistica,
+                      url_imagen_retail: finalImgUrl,
+                      disponible: true,
+                      activo: true
+                    }]);
+
+                  dbResult = error
+                    ? `Error al crear: ${error.message}`
+                    : `Éxito: El producto "${nombre}" (${formato_venta}) ha sido agregado al catálogo con un precio de costo de $${precio_costo.toLocaleString("es-CL")} y precio de venta de $${precioVentaFinal.toLocaleString("es-CL")}${margenAplicado !== null ? ` (calculado automáticamente agregando un ${margenAplicado}% de margen de ganancia configurado en la app)` : ""}. ${!url_imagen_retail ? "Se ha asignado una imagen por defecto, recuerda que el usuario puede proporcionar una URL para actualizarla." : ""}`;
+                }
+                else if (name === "cambiar_disponibilidad_producto") {
+                  const { nombre_producto, disponible } = args;
+                  const { error } = await supabase
+                    .from("productos")
+                    .update({ disponible: disponible })
                     .ilike("nombre", `%${nombre_producto}%`);
 
                   dbResult = error
-                    ? `Error al actualizar detalles: ${error.message}`
-                    : `Éxito: Los detalles del producto que coincide con "${nombre_producto}" se han actualizado correctamente en Supabase. Campos modificados: ${Object.keys(updates).join(", ")}.`;
+                    ? `Error al cambiar disponibilidad: ${error.message}`
+                    : `Éxito: La disponibilidad del producto que coincide con "${nombre_producto}" ha sido cambiada a ${disponible ? "Disponible" : "Agotado/Deshabilitado"}.`;
                 }
+                else if (name === "eliminar_producto") {
+                  const { nombre_producto } = args;
+                  const { error } = await supabase
+                    .from("productos")
+                    .update({ activo: false })
+                    .ilike("nombre", `%${nombre_producto}%`);
+
+                  dbResult = error
+                    ? `Error al eliminar: ${error.message}`
+                    : `Éxito: El producto que coincide con "${nombre_producto}" ha sido desactivado del catálogo con éxito.`;
+                }
+                else if (name === "actualizar_detalles_producto") {
+                  const { nombre_producto, nuevo_nombre, nuevo_formato_venta, nueva_url_imagen, nueva_categoria_logistica } = args;
+                  
+                  const updates = {};
+                  if (nuevo_nombre !== undefined) updates.nombre = nuevo_nombre;
+                  if (nuevo_formato_venta !== undefined) updates.formato_venta = nuevo_formato_venta;
+                  if (nueva_url_imagen !== undefined) updates.url_imagen_retail = nueva_url_imagen;
+                  if (nueva_categoria_logistica !== undefined) updates.categoria_logistica = nueva_categoria_logistica;
+
+                  if (Object.keys(updates).length === 0) {
+                    dbResult = "Error: No se especificaron campos válidos para actualizar.";
+                  } else {
+                    const { error } = await supabase
+                      .from("productos")
+                      .update(updates)
+                      .ilike("nombre", `%${nombre_producto}%`);
+
+                    dbResult = error
+                      ? `Error al actualizar detalles: ${error.message}`
+                      : `Éxito: Los detalles del producto que coincide con "${nombre_producto}" se han actualizado correctamente en Supabase. Campos modificados: ${Object.keys(updates).join(", ")}.`;
+                  }
+                }
+              } catch (dbErr) {
+                console.error("[whatsapp-incoming] Error en ejecución de DB para functionCall:", dbErr.message);
+                dbResult = `Error de base de datos interno: ${dbErr.message}`;
               }
-            } catch (dbErr) {
-              console.error("[whatsapp-incoming] Error en ejecución de DB para functionCall:", dbErr.message);
-              dbResult = `Error de base de datos interno: ${dbErr.message}`;
+
+              console.log(`[whatsapp-incoming] Resultado de DB para Gemini (${name}): ${dbResult}`);
+              
+              functionResponses.push({
+                functionResponse: {
+                  name: name,
+                  response: { result: dbResult }
+                }
+              });
+              dbResultsSummary.push(`${name}: ${dbResult}`);
             }
 
-            console.log(`[whatsapp-incoming] Resultado de DB para Gemini: ${dbResult}`);
-
-            // Llamada de seguimiento a Gemini (solo texto, sin audio)
+            // Llamada de seguimiento a Gemini (solo texto, sin audio) pasando todas las respuestas de función
             try {
               const finalRes = await fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`,
@@ -779,8 +793,8 @@ ${itemsTexto}`;
                   body: JSON.stringify({
                     contents: [
                       { role: "user", parts: parts },
-                      { role: "model", parts: [candidatePart] },
-                      { role: "function", parts: [{ functionResponse: { name: name, response: { result: dbResult } } }] }
+                      { role: "model", parts: candidateParts },
+                      { role: "function", parts: functionResponses }
                     ],
                     tools: tools,
                     generationConfig: { temperature: temperature }
@@ -798,10 +812,10 @@ ${itemsTexto}`;
               for (const part of finalParts) {
                 if (part.text) finalResponseText += part.text + " ";
               }
-              responseText = finalResponseText.trim() || `Operación completada. Detalle: ${dbResult}`;
+              responseText = finalResponseText.trim() || `Operaciones completadas. Resumen:\n${dbResultsSummary.join("\n")}`;
             } catch (finalErr) {
               console.error("[whatsapp-incoming] Error en segunda llamada a Gemini:", finalErr.message);
-              responseText = `Operación completada en el catálogo. Detalle: ${dbResult}`;
+              responseText = `Operaciones completadas en el catálogo. Resumen:\n${dbResultsSummary.join("\n")}`;
             }
           } else {
             let extractedText = "";

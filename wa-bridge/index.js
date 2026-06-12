@@ -28,6 +28,19 @@ let sock = null;
 let connectionState = 'disconnected';
 let latestQr = null;
 
+// Caché en memoria para evitar el procesamiento duplicado de mensajes
+const processedMessageIds = new Map(); // id -> timestamp
+
+// Limpieza periódica cada minuto de mensajes con más de 5 minutos de antigüedad
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, timestamp] of processedMessageIds.entries()) {
+    if (now - timestamp > 5 * 60 * 1000) {
+      processedMessageIds.delete(id);
+    }
+  }
+}, 60000);
+
 async function connectToWhatsApp() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
   const { version, isLatest } = await fetchLatestBaileysVersion();
@@ -75,6 +88,15 @@ async function connectToWhatsApp() {
     if (m.type !== 'notify') return;
     for (const msg of m.messages) {
       if (msg.key.fromMe) continue; // Ignorar mensajes enviados por la propia cuenta
+
+      const msgId = msg.key.id;
+      if (msgId) {
+        if (processedMessageIds.has(msgId)) {
+          console.log(`[wa-bridge] Ignorando mensaje duplicado con ID: ${msgId}`);
+          continue;
+        }
+        processedMessageIds.set(msgId, Date.now());
+      }
 
       const senderNumber = msg.key.remoteJid; // ej: 56912345678@s.whatsapp.net o LID@lid
       
