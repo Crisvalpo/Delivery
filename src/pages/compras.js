@@ -58,10 +58,10 @@ export default function ComprasPage() {
       setItems(data.items || []);
       setVentana(data.ventana || null);
 
-      // Inicializar estado local como 'pendiente' para todos
+      // Inicializar estado local con el estado real retornado del servidor
       const inicial = {};
       (data.items || []).forEach((it) => {
-        inicial[it.producto_id] = ESTADO_INICIAL;
+        inicial[it.producto_id] = it.estado || ESTADO_INICIAL;
       });
       setEstadoLocal(inicial);
     } catch (err) {
@@ -108,8 +108,33 @@ export default function ComprasPage() {
     }
   };
 
-  const resetearItem = (productoId) => {
+  const resetearItem = async (productoId) => {
+    // Optimistic UI
     setEstadoLocal((prev) => ({ ...prev, [productoId]: ESTADO_INICIAL }));
+    setGuardando((prev) => ({ ...prev, [productoId]: true }));
+
+    try {
+      const res = await fetch("/api/admin-consolidar", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-secret": ADMIN_SECRET,
+        },
+        body: JSON.stringify({ producto_id: productoId, accion: "pendiente" }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setEstadoLocal((prev) => ({ ...prev, [productoId]: "conseguido" }));
+        mostrarToast("Error al restablecer. Intenta de nuevo.", "error");
+      } else {
+        mostrarToast("🔄 Producto restablecido a pendiente", "success");
+      }
+    } catch {
+      setEstadoLocal((prev) => ({ ...prev, [productoId]: "conseguido" }));
+      mostrarToast("Error de conexión.", "error");
+    } finally {
+      setGuardando((prev) => ({ ...prev, [productoId]: false }));
+    }
   };
 
   // Métricas
@@ -382,9 +407,14 @@ export default function ComprasPage() {
                       {(esConseguido || esAgotado) && (
                         <button
                           onClick={() => resetearItem(item.producto_id)}
-                          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 font-bold text-sm active:scale-95 transition-all"
+                          disabled={cargando}
+                          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
                         >
-                          <RotateCcw className="w-4 h-4" />
+                          {cargando ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <RotateCcw className="w-4 h-4" />
+                          )}
                           Deshacer
                         </button>
                       )}

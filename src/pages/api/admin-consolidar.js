@@ -32,7 +32,7 @@ export default async function handler(req, res) {
   // --- Método GET: Consultar ítems agrupados ---
   if (req.method === "GET") {
     try {
-      // Consultamos todos los items_pedido pendientes de los pedidos de la ventana activa que estén en estado 'Pendiente'
+      // Consultamos todos los items_pedido de los pedidos en estado 'Pendiente' o 'Preparado' de la ventana activa
       const { data: items, error: itemsErr } = await supabase
         .from("items_pedido")
         .select(`
@@ -48,8 +48,7 @@ export default async function handler(req, res) {
             ventana_id
           )
         `)
-        .eq("estado", "pendiente")
-        .eq("pedidos.estado", "Pendiente")
+        .in("pedidos.estado", ["Pendiente", "Preparado"])
         .eq("pedidos.ventana_id", ventanaActiva.id);
 
       if (itemsErr) throw itemsErr;
@@ -66,9 +65,23 @@ export default async function handler(req, res) {
             nombre: prod.nombre,
             formato_venta: prod.formato_venta,
             cantidad_total: 0,
+            estado: it.estado,
           };
         }
         agrupado[it.producto_id].cantidad_total += it.cantidad;
+
+        // Regla de consolidación de estado:
+        // Si hay algún ítem 'pendiente', el estado consolidado del producto es 'pendiente'.
+        // Si no hay pendientes, pero hay al menos un 'conseguido', es 'conseguido'.
+        // Si todos son 'no_disponible', entonces es 'no_disponible'.
+        const estadoActual = agrupado[it.producto_id].estado;
+        if (it.estado === "pendiente") {
+          agrupado[it.producto_id].estado = "pendiente";
+        } else if (it.estado === "conseguido" && estadoActual !== "pendiente") {
+          agrupado[it.producto_id].estado = "conseguido";
+        } else if (it.estado === "no_disponible" && estadoActual !== "pendiente" && estadoActual !== "conseguido") {
+          agrupado[it.producto_id].estado = "no_disponible";
+        }
       });
 
       const itemsConsolidados = Object.values(agrupado).sort((a, b) => b.cantidad_total - a.cantidad_total);
@@ -88,19 +101,19 @@ export default async function handler(req, res) {
   if (req.method === "POST") {
     const { producto_id, accion } = req.body;
 
-    if (!producto_id || !["conseguido", "no_disponible"].includes(accion)) {
+    if (!producto_id || !["pendiente", "conseguido", "no_disponible"].includes(accion)) {
       return res.status(400).json({
         success: false,
-        message: "Campos 'producto_id' y 'accion' (conseguido | no_disponible) son requeridos.",
+        message: "Campos 'producto_id' y 'accion' (pendiente | conseguido | no_disponible) son requeridos.",
       });
     }
 
     try {
-      // 1. Obtener los IDs de pedidos pendientes de la ventana activa
+      // 1. Obtener los IDs de pedidos pendientes o preparados de la ventana activa
       const { data: pedidos, error: pedErr } = await supabase
         .from("pedidos")
         .select("id")
-        .eq("estado", "Pendiente")
+        .in("estado", ["Pendiente", "Preparado"])
         .eq("ventana_id", ventanaActiva.id);
 
       if (pedErr) throw pedErr;
@@ -108,7 +121,7 @@ export default async function handler(req, res) {
       if (!pedidos || pedidos.length === 0) {
         return res.status(200).json({
           success: true,
-          message: "No hay pedidos pendientes en la ventana activa para actualizar.",
+          message: "No hay pedidos pendientes o preparados en la ventana activa para actualizar.",
         });
       }
 
@@ -119,8 +132,7 @@ export default async function handler(req, res) {
         .from("items_pedido")
         .update({ estado: accion })
         .in("pedido_id", pedidoIds)
-        .eq("producto_id", producto_id)
-        .eq("estado", "pendiente");
+        .eq("producto_id", producto_id);
 
       if (updateErr) throw updateErr;
 
