@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Head from "next/head";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import { Atkinson_Hyperlegible_Next } from "next/font/google";
 import {
   ShoppingCart,
@@ -14,6 +15,7 @@ import {
   PackageX,
   Share2,
   AlertTriangle,
+  Truck,
 } from "lucide-react";
 
 const atkinson = Atkinson_Hyperlegible_Next({
@@ -29,6 +31,7 @@ const ADMIN_SECRET = process.env.NEXT_PUBLIC_ADMIN_SECRET || "";
 const ESTADO_INICIAL = "pendiente";
 
 export default function ComprasPage() {
+  const router = useRouter();
   const [items, setItems] = useState([]); // lista del servidor
   const [estadoLocal, setEstadoLocal] = useState({}); // { [producto_id]: 'pendiente' | 'conseguido' | 'agotado' }
   const [ventana, setVentana] = useState(null);
@@ -36,6 +39,37 @@ export default function ComprasPage() {
   const [error, setError] = useState(null);
   const [guardando, setGuardando] = useState({}); // { [producto_id]: boolean }
   const [toast, setToast] = useState(null); // { message, type }
+  const [activandoRuta, setActivandoRuta] = useState(false);
+
+  const activarRutaDespacho = async () => {
+    setActivandoRuta(true);
+    try {
+      const res = await fetch("/api/admin-consolidar", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-secret": ADMIN_SECRET,
+        },
+        body: JSON.stringify({ accion: "preparar_todos" }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        mostrarToast("Error al activar la ruta de despacho.", "error");
+        return;
+      }
+      
+      // Auto-login Single Sign-On
+      if (typeof window !== "undefined") {
+        localStorage.setItem("luke_admin_authenticated", "true");
+      }
+      mostrarToast("🚚 Pedidos preparados. ¡Iniciando ruta!", "success");
+      router.push("/ruta");
+    } catch {
+      mostrarToast("Error de conexión al activar la ruta.", "error");
+    } finally {
+      setActivandoRuta(false);
+    }
+  };
 
   const mostrarToast = (message, type = "success") => {
     setToast({ message, type });
@@ -426,12 +460,26 @@ export default function ComprasPage() {
 
             {/* Mensaje de cierre al completar */}
             {progreso === 100 && (
-              <div className="flex flex-col items-center gap-3 py-8 text-center animate-fade-in">
+              <div className="flex flex-col items-center gap-3.5 py-8 text-center animate-fade-in bg-slate-900/40 border border-slate-900 rounded-3xl p-6">
                 <div className="text-5xl">🎉</div>
-                <p className="font-black text-emerald-400 text-lg">¡Lista completada!</p>
-                <p className="text-xs text-slate-400 leading-relaxed max-w-xs">
-                  Todos los ítems han sido marcados. Los pedidos de los clientes han sido actualizados automáticamente.
-                </p>
+                <div>
+                  <p className="font-black text-emerald-400 text-lg">¡Lista completada!</p>
+                  <p className="text-xs text-slate-400 leading-relaxed max-w-xs mt-1">
+                    Todos los ítems han sido marcados. Puedes iniciar la ruta para avisar a los clientes automáticamente.
+                  </p>
+                </div>
+                <button
+                  onClick={activarRutaDespacho}
+                  disabled={activandoRuta}
+                  className="w-full max-w-xs flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-sm py-4 rounded-2xl shadow-lg transition-all disabled:opacity-60"
+                >
+                  {activandoRuta ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Truck className="w-5 h-5" />
+                  )}
+                  Iniciar Ruta de Despacho 🚐
+                </button>
               </div>
             )}
           </>

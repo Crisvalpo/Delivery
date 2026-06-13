@@ -56,6 +56,16 @@ export default function RutaPage() {
   const [autenticado, setAutenticado] = useState(false);
   const [pinError, setPinError] = useState(false);
 
+  // Auto-login Single Sign-On
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const auth = localStorage.getItem("luke_admin_authenticated");
+      if (auth === "true") {
+        setAutenticado(true);
+      }
+    }
+  }, []);
+
   const [pedidos, setPedidos] = useState([]);
   const [ventana, setVentana] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -73,6 +83,9 @@ export default function RutaPage() {
     if (pinInput === ADMIN_SECRET || pinInput === (ADMIN_SECRET?.slice(-4))) {
       setAutenticado(true);
       setPinError(false);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("luke_admin_authenticated", "true");
+      }
     } else {
       setPinError(true);
       setPinInput("");

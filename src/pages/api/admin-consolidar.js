@@ -97,14 +97,43 @@ export default async function handler(req, res) {
     }
   }
 
-  // --- Método POST: Actualizar estado de ítems de forma masiva ---
+  // --- Método POST: Actualizar estado de ítems de forma masiva o preparar pedidos ---
   if (req.method === "POST") {
     const { producto_id, accion } = req.body;
 
-    if (!producto_id || !["pendiente", "conseguido", "no_disponible"].includes(accion)) {
+    if (!accion || !["pendiente", "conseguido", "no_disponible", "preparar_todos"].includes(accion)) {
       return res.status(400).json({
         success: false,
-        message: "Campos 'producto_id' y 'accion' (pendiente | conseguido | no_disponible) son requeridos.",
+        message: "Campo 'accion' inválido o no provisto (pendiente | conseguido | no_disponible | preparar_todos).",
+      });
+    }
+
+    // Caso de uso: Preparar todos los pedidos de la ventana activa
+    if (accion === "preparar_todos") {
+      try {
+        const { error: updateErr } = await supabase
+          .from("pedidos")
+          .update({ estado: "Preparado" })
+          .eq("ventana_id", ventanaActiva.id)
+          .eq("estado", "Pendiente");
+
+        if (updateErr) throw updateErr;
+
+        return res.status(200).json({
+          success: true,
+          message: "Todos los pedidos pendientes han sido marcados como 'Preparado' con éxito.",
+        });
+      } catch (err) {
+        console.error("[admin-consolidar] Error en POST (preparar_todos):", err.message);
+        return res.status(500).json({ success: false, error: err.message });
+      }
+    }
+
+    // Caso de uso convencional: Actualizar producto de forma masiva
+    if (!producto_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Campo 'producto_id' es requerido para esta acción.",
       });
     }
 
