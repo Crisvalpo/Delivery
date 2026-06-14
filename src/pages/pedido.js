@@ -168,6 +168,14 @@ export default function PedidoPage() {
           setPedidoPendiente(data.pedidoPendiente || null);
           setTokenUsado(data.usado || false);
         } else if (cliente_id) {
+          // Por seguridad extrema en producción, bloqueamos el acceso directo por cliente_id (solo local)
+          const isLocal = typeof window !== "undefined" && 
+            (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+        
+          if (!isLocal) {
+            throw new Error("Acceso denegado. Por seguridad, debes utilizar un enlace de sesión temporal de WhatsApp.");
+          }
+        
           // Retrocompatibilidad con cliente_id directo (ej: para pruebas locales/admin)
           const { data, error: cliErr } = await supabase
             .from("clientes")

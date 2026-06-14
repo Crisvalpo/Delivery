@@ -37,6 +37,7 @@ export default function RegistroPage() {
   const [isPhonePrefilled, setIsPhonePrefilled] = useState(false);
   const [checkingRegistered, setCheckingRegistered] = useState(true);
   const [clienteIdExistente, setClienteIdExistente] = useState(null);
+  const [yaRegistrado, setYaRegistrado] = useState(false);
 
   // Cargar teléfono o LID del query string y validar registro previo
   useEffect(() => {
@@ -97,8 +98,12 @@ export default function RegistroPage() {
           if (!clientError && clientes && clientes.length > 0) {
             const cliente = clientes[0];
             if (cliente.registro_completo) {
-              console.log("[Registro] Cliente ya registrado por completo. Redirigiendo al catálogo...", cliente.id);
-              router.push(`/pedido?cliente_id=${cliente.id}`);
+              console.log("[Registro] Cliente ya registrado por completo. Mostrando pantalla de seguridad.");
+              setClienteIdExistente(cliente.id);
+              if (cliente.nombre_contacto) setNombreContacto(cliente.nombre_contacto);
+              if (cliente.nombre_tienda) setNombreTienda(cliente.nombre_tienda);
+              setYaRegistrado(true);
+              setCheckingRegistered(false);
               return;
             } else {
               console.log("[Registro] Encontrado pre-registro temporal de Jaime. Precargando datos...", cliente);
@@ -491,6 +496,33 @@ export default function RegistroPage() {
                 </p>
               </div>
               <Loader2 className="h-6 w-6 animate-spin text-orange-500 mt-4" />
+            </div>
+          ) : yaRegistrado ? (
+            <div className="text-center py-8 space-y-6 animate-fade-in flex flex-col items-center justify-center">
+              <div className="bg-orange-50 text-orange-500 p-5 rounded-full border border-orange-100 shadow-sm">
+                <Store className="h-10 w-10 text-orange-600" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-black text-slate-800">
+                  Almacén ya Registrado
+                </h2>
+                <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                  El almacén <strong>{nombreTienda}</strong> ya completó su registro en LukeDelivery.
+                </p>
+                <p className="text-xs text-slate-500 leading-relaxed max-w-[280px] mx-auto mt-2">
+                  Por motivos de seguridad, no se puede acceder al catálogo directamente desde esta página de registro.
+                </p>
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-700 leading-relaxed font-semibold mt-4 text-left">
+                  💡 Pídele un enlace de pedido seguro a nuestro bot Jaime enviando cualquier mensaje por WhatsApp. Los enlaces de compra son personales y temporales.
+                </div>
+              </div>
+              
+              <a
+                href="https://wa.me/56951875221?text=Quiero%20comprar"
+                className="inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-4 px-6 rounded-xl transition-all w-full text-sm shadow-lg shadow-[#25D366]/20 uppercase tracking-wide cursor-pointer"
+              >
+                📲 Abrir WhatsApp con Jaime
+              </a>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
