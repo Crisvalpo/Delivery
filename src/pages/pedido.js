@@ -250,7 +250,7 @@ export default function PedidoPage() {
   const fmt = (n) => `$${n.toLocaleString("es-CL")}`;
 
   return (
-    <div className="min-h-screen bg-bg-app pb-40">
+    <div className="min-h-screen bg-slate-100 pb-40">
       <Head>
         <title>Armar Pedido | LukeDelivery</title>
         <meta
@@ -264,16 +264,16 @@ export default function PedidoPage() {
       </Head>
 
       {/* ===== HEADER ===== */}
-      <header className="sticky top-0 z-40 bg-bg-surface/90 backdrop-blur-lg border-b border-border px-5 py-3.5 flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-5 py-3.5 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2.5">
           <div className="bg-brand/15 p-2 rounded-xl">
             <Truck className="h-5 w-5 text-brand" />
           </div>
           <div>
-            <h1 className="text-base font-bold text-text-primary leading-none tracking-tight">
+            <h1 className="text-base font-bold text-slate-800 leading-none tracking-tight">
               {clienteInfo ? clienteInfo.nombre_tienda : "LukeDelivery"}
             </h1>
-            <span className="text-[10px] text-text-dim font-medium">
+            <span className="text-[10px] text-slate-500 font-medium">
               {clienteInfo ? `Hola, ${clienteInfo.nombre_contacto}` : "Honestidad Radical B2B"}
             </span>
           </div>
@@ -289,16 +289,16 @@ export default function PedidoPage() {
       <main className="max-w-lg mx-auto px-4 pt-5 pb-36">
         {/* ===== BANNER VENTANA ACTIVA ===== */}
         {!tokenError && !loading && ventanaActiva && !tokenUsado && (
-          <div className="bg-brand/10 border border-brand/20 rounded-2xl p-4.5 mb-5 flex items-start gap-3 animate-fade-in shadow-sm">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4.5 mb-5 flex items-start gap-3 animate-fade-in shadow-sm">
             <Truck className="h-5.5 w-5.5 text-brand shrink-0 mt-0.5" />
             <div className="text-xs">
-              <p className="font-extrabold text-text-primary text-sm">
+              <p className="font-extrabold text-slate-800 text-sm">
                 Ventana de Despacho: {ventanaActiva.nombre}
               </p>
-              <p className="text-text-secondary mt-1 font-medium">
+              <p className="text-slate-600 mt-1 font-medium">
                 Recibes: <span className="font-black text-brand">{formatFechaEntrega(ventanaActiva.fecha_entrega)}</span>
               </p>
-              <p className="text-[10px] text-text-dim mt-2 bg-bg-surface border border-border py-1 px-2.5 rounded-lg w-fit">
+              <p className="text-[10px] text-slate-500 mt-2 bg-white border border-slate-200 py-1 px-2.5 rounded-lg w-fit">
                 Cierre de pedidos: {new Date(ventanaActiva.fecha_cierre).toLocaleString("es-CL", {
                   dateStyle: "short",
                   timeStyle: "short"
@@ -310,19 +310,19 @@ export default function PedidoPage() {
 
         {/* ===== VENTAS CERRADAS TEMPORALMENTE ===== */}
         {!tokenError && !loading && !ventanaActiva && (
-          <div className="bg-bg-surface border-2 border-border rounded-[24px] p-8 text-center my-10 max-w-sm mx-auto shadow-xl flex flex-col items-center gap-5">
+          <div className="bg-white border border-slate-200 rounded-[24px] p-8 text-center my-10 max-w-sm mx-auto shadow-xl flex flex-col items-center gap-5">
             <div className="bg-brand/10 text-brand p-5 rounded-full w-fit">
               <AlertTriangle className="h-10 w-10 animate-bounce text-brand" />
             </div>
             <div>
-              <h3 className="text-lg font-black text-text-primary mb-2">
+              <h3 className="text-lg font-black text-slate-800 mb-2">
                 Toma de Pedidos Cerrada
               </h3>
-              <p className="text-sm text-text-secondary leading-relaxed">
+              <p className="text-sm text-slate-600 leading-relaxed">
                 En este momento nos encontramos en el proceso de compra mayorista y reparto en ruta para asegurar los mejores precios.
               </p>
             </div>
-            <div className="bg-bg-surface-2 p-4 rounded-2xl border border-border text-xs text-text-dim w-full font-semibold">
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs text-slate-500 w-full font-semibold">
               💡 Te notificaremos por WhatsApp en cuanto abramos la próxima ventana de pedidos.
             </div>
           </div>
@@ -332,18 +332,18 @@ export default function PedidoPage() {
         {!tokenError && !loading && ventanaActiva && !tokenUsado && (
           <div className="grid grid-cols-1 gap-4 mb-6 animate-fade-in">
             {/* Costo de Flete Card */}
-            <div className="bg-bg-surface border-2 border-border rounded-2xl p-5 text-center flex flex-col items-center">
-              <span className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-1">Costo de Flete Estimado</span>
+            <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-5 text-center flex flex-col items-center">
+              <span className="text-xs font-bold text-slate-600 uppercase tracking-widest mb-1">Costo de Flete Estimado</span>
               <div className="flex items-baseline gap-1">
                 <span className="text-2xl font-black text-brand">$</span>
-                <span className="text-5xl font-black text-text-primary leading-none">
+                <span className="text-5xl font-black text-slate-800 leading-none">
                   {(3000 + Object.entries(carrito).reduce((sum, [id, cant]) => {
                     const p = productos.find(prod => prod.id === id);
                     return sum + (p && p.categoria_logistica === "Pesado" ? 500 * cant : 0);
                   }, 0)).toLocaleString("es-CL")}
                 </span>
               </div>
-              <p className="text-[11px] text-text-dim mt-2 leading-tight font-medium">
+              <p className="text-[11px] text-slate-500 mt-2 leading-tight font-medium">
                 $3.000 base + $500 por bulto pesado. ¡Calculado automáticamente!
               </p>
             </div>
@@ -352,14 +352,14 @@ export default function PedidoPage() {
 
         {/* ===== TOKEN ERROR (ACCESO DENEGADO) ===== */}
         {tokenError && (
-          <div className="bg-bg-surface border-2 border-red-500/30 rounded-2xl p-6 text-center my-10 max-w-sm mx-auto shadow-xl">
+          <div className="bg-white border border-red-200 rounded-2xl p-6 text-center my-10 max-w-sm mx-auto shadow-xl">
             <div className="mx-auto bg-red-500/10 text-red-500 p-4 rounded-full w-fit mb-4">
               <AlertTriangle className="h-10 w-10" />
             </div>
-            <h3 className="text-lg font-bold text-text-primary mb-2">
+            <h3 className="text-lg font-bold text-slate-800 mb-2">
               Acceso Denegado
             </h3>
-            <p className="text-sm text-text-secondary mb-6 leading-relaxed">
+            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
               {tokenError}
             </p>
             <a
@@ -395,12 +395,12 @@ export default function PedidoPage() {
           </div>
         ) : !tokenError && tokenUsado ? (
           /* ===== VISTA DE RESUMEN DE PEDIDO (READ-ONLY) ===== */
-          <div className="bg-bg-surface border-2 border-border rounded-3xl p-6 shadow-xl animate-fade-in flex flex-col gap-6">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl animate-fade-in flex flex-col gap-6">
             <div className="flex flex-col items-center text-center gap-2">
               <div className="bg-brand/10 text-brand p-3.5 rounded-full w-fit">
                 <Check className="h-10 w-10 text-brand" />
               </div>
-              <h2 className="text-xl font-black text-text-primary mt-2">
+              <h2 className="text-xl font-black text-slate-800 mt-2">
                 Pedido Confirmado y en Preparación
               </h2>
               <span className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
@@ -412,11 +412,11 @@ export default function PedidoPage() {
               <>
                 {/* Info de Despacho */}
                 {ventanaActiva && (
-                  <div className="bg-bg-surface-2 border border-border rounded-2xl p-4 flex gap-3 items-start">
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex gap-3 items-start">
                     <Truck className="h-5 w-5 text-brand shrink-0 mt-0.5" />
                     <div className="text-xs">
-                      <p className="font-extrabold text-text-primary">Programado para entrega</p>
-                      <p className="text-text-secondary mt-0.5">
+                      <p className="font-extrabold text-slate-800">Programado para entrega</p>
+                      <p className="text-slate-600 mt-0.5">
                         {formatFechaEntrega(ventanaActiva.fecha_entrega)}
                       </p>
                     </div>
@@ -425,20 +425,20 @@ export default function PedidoPage() {
 
                 {/* Items del Pedido */}
                 <div>
-                  <h3 className="text-sm font-black text-text-secondary uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <h3 className="text-sm font-black text-slate-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                     <Package className="h-4 w-4 text-brand" /> Detalle de productos
                   </h3>
-                  <div className="border border-border rounded-2xl overflow-hidden divide-y divide-border bg-bg-surface-2 max-h-60 overflow-y-auto">
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-200 bg-slate-50 max-h-60 overflow-y-auto">
                     {pedidoPendiente.items && pedidoPendiente.items.map((it) => (
                       <div key={it.id} className="p-3.5 flex items-center justify-between gap-4 text-xs">
                         <div className="min-w-0">
-                          <p className="font-bold text-text-primary truncate">{it.nombre}</p>
-                          <span className="text-[10px] text-text-dim mt-0.5 inline-block bg-bg-surface border border-border px-1.5 py-0.5 rounded">
+                          <p className="font-bold text-slate-800 truncate">{it.nombre}</p>
+                          <span className="text-[10px] text-slate-500 mt-0.5 inline-block bg-white border border-slate-200 px-1.5 py-0.5 rounded">
                             {it.formato_venta}
                           </span>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="font-black text-text-primary">
+                          <p className="font-black text-slate-800">
                             {it.cantidad} {it.cantidad === 1 ? "und" : "unds"} x {fmt(it.precioUnitario)}
                           </p>
                           <p className="text-[10px] text-brand font-bold mt-0.5">
@@ -451,37 +451,37 @@ export default function PedidoPage() {
                 </div>
 
                 {/* Resumen Financiero */}
-                <div className="bg-bg-surface-2 border border-border rounded-2xl p-4.5 space-y-2.5 text-xs">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4.5 space-y-2.5 text-xs">
                   <div className="flex justify-between">
-                    <span className="text-text-secondary">Neto Mercadería:</span>
-                    <span className="text-text-primary font-bold">{fmt(pedidoPendiente.total_neto || 0)}</span>
+                    <span className="text-slate-600">Neto Mercadería:</span>
+                    <span className="text-slate-800 font-bold">{fmt(pedidoPendiente.total_neto || 0)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-text-secondary">Costo de Flete:</span>
-                    <span className="text-text-primary font-bold">{fmt(pedidoPendiente.flete || 0)}</span>
+                    <span className="text-slate-600">Costo de Flete:</span>
+                    <span className="text-slate-800 font-bold">{fmt(pedidoPendiente.flete || 0)}</span>
                   </div>
-                  <div className="border-t border-border pt-2.5 flex justify-between text-sm font-black">
+                  <div className="border-t border-slate-200 pt-2.5 flex justify-between text-sm font-black">
                     <span className="text-brand">TOTAL A PAGAR:</span>
                     <span className="text-brand">{fmt(pedidoPendiente.total_pagar || 0)}</span>
                   </div>
                 </div>
               </>
             ) : (
-              <p className="text-xs text-text-secondary text-center">
+              <p className="text-xs text-slate-500 text-center">
                 No se encontró un pedido activo para esta ventana.
               </p>
             )}
 
             {/* Advertencia / Call to action */}
-            <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4.5 flex gap-3 text-left">
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4.5 flex gap-3 text-left">
               <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
               <div className="text-xs">
                 <p className="font-black text-amber-600">¿Quieres agregar más productos?</p>
-                <p className="text-text-secondary mt-1 leading-relaxed">
+                <p className="text-slate-600 mt-1 leading-relaxed">
                   Por seguridad y para evitar fraudes, este enlace ya no permite modificar el pedido directamente. 
                   Si deseas agregar más artículos, solicita un nuevo enlace con el bot Jaime en WhatsApp.
                 </p>
-                <p className="text-text-secondary mt-1.5 font-bold">
+                <p className="text-slate-600 mt-1.5 font-bold">
                   ¡Los nuevos productos se fusionarán automáticamente sin flete extra!
                 </p>
               </div>
@@ -622,12 +622,12 @@ export default function PedidoPage() {
 
       {/* ===== STICKY FOOTER: REGLA DEL FURGÓN ===== */}
       {!tokenError && !loading && productosFiltrados.length > 0 && ventanaActiva && !tokenUsado && (
-        <footer className="fixed bottom-0 inset-x-0 bg-bg-surface/95 backdrop-blur-xl border-t border-border py-6 px-5 z-40">
+        <footer className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200 py-6 px-5 z-40 shadow-lg">
           <div className="max-w-lg mx-auto">
             {/* Progress bar */}
             <div className="mb-4">
               <div className="flex justify-between items-end text-sm mb-1.5">
-                <span className="text-text-secondary font-bold uppercase tracking-wide">
+                <span className="text-slate-600 font-bold uppercase tracking-wide">
                   Pedido mínimo: $35.000
                 </span>
                 <span
@@ -636,7 +636,7 @@ export default function PedidoPage() {
                   {fmt(total)}
                 </span>
               </div>
-              <div className="h-3 w-full bg-bg-surface-2 rounded-full overflow-hidden">
+              <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ${
                     cumpleMinimo ? "bg-brand" : "bg-accent"
@@ -650,11 +650,11 @@ export default function PedidoPage() {
 
             {/* Advertencia de Fusión si ya tiene pedido Pendiente */}
             {pedidoPendiente && total > 0 && (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 mb-3 flex items-start gap-2.5 text-left">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 mb-3 flex items-start gap-2.5 text-left">
                 <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                 <div className="text-[11px] leading-snug">
                   <p className="font-extrabold text-amber-500">⚠️ Pedido en Curso Detectado</p>
-                  <p className="text-text-secondary mt-0.5">
+                  <p className="text-slate-600 mt-0.5">
                     Ya tienes un pedido activo en esta ventana. Estos productos se <strong>agregarán a tu pedido anterior</strong> cobrando un flete único.
                   </p>
                 </div>
@@ -679,8 +679,8 @@ export default function PedidoPage() {
                 )}
               </button>
             ) : (
-              <div className="w-full bg-bg-surface-2 border-2 border-border text-center py-4 rounded-xl">
-                <span className="text-base font-bold text-text-dim">
+              <div className="w-full bg-slate-50 border border-slate-200 text-center py-4 rounded-xl">
+                <span className="text-base font-bold text-slate-400">
                   Confirmar Pedido
                 </span>
                 {total > 0 && (
@@ -696,31 +696,31 @@ export default function PedidoPage() {
 
       {/* ===== SUCCESS STATE (FULL SCREEN MODAL OVERLAY) ===== */}
       {orderSuccess && (
-        <div className="fixed inset-0 z-50 bg-bg-app/95 backdrop-blur-md flex items-center justify-center p-5 text-center animate-fade-in">
-          <div className="bg-bg-surface border-4 border-brand rounded-[32px] p-8 max-w-md w-full shadow-2xl flex flex-col items-center gap-6">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-5 text-center animate-fade-in">
+          <div className="bg-white border-2 border-brand rounded-[32px] p-8 max-w-md w-full shadow-2xl flex flex-col items-center gap-6">
             <div className="bg-brand/10 text-brand p-5 rounded-full w-fit">
               <Check className="h-16 w-16" />
             </div>
-            <h2 className="text-2xl font-black text-text-primary leading-tight">
+            <h2 className="text-2xl font-black text-slate-800 leading-tight">
               {orderSummary?.fusionado ? "¡Pedido Fusionado con Éxito!" : "¡Pedido Realizado con Éxito!"}
             </h2>
-            <p className="text-base text-text-secondary leading-relaxed">
+            <p className="text-base text-slate-600 leading-relaxed">
               {orderSummary?.fusionado
                 ? "Hemos añadido estos productos a tu pedido anterior para esta misma ventana de entrega. ¡Ahorraste el flete adicional!"
                 : "Tu pedido se ha registrado correctamente y ya está en nuestro sistema. No es necesario enviar nada por WhatsApp."}
             </p>
 
             {/* Financial Summary */}
-            <div className="bg-bg-surface-2 w-full rounded-2xl p-5 border border-border text-left space-y-3 text-sm">
+            <div className="bg-slate-50 w-full rounded-2xl p-5 border border-slate-200 text-left space-y-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-text-secondary">Neto Mercadería:</span>
-                <span className="text-text-primary font-bold">{fmt(orderSummary.totalNeto)}</span>
+                <span className="text-slate-600">Neto Mercadería:</span>
+                <span className="text-slate-800 font-bold">{fmt(orderSummary.totalNeto)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-text-secondary">Flete Escalonado:</span>
-                <span className="text-text-primary font-bold">{fmt(orderSummary.flete)}</span>
+                <span className="text-slate-600">Flete Escalonado:</span>
+                <span className="text-slate-800 font-bold">{fmt(orderSummary.flete)}</span>
               </div>
-              <div className="border-t border-border pt-3 flex justify-between text-base font-black">
+              <div className="border-t border-slate-200 pt-3 flex justify-between text-base font-black">
                 <span className="text-brand">TOTAL A PAGAR:</span>
                 <span className="text-brand">{fmt(orderSummary.totalPagar)}</span>
               </div>
