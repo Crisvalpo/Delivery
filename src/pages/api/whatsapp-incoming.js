@@ -139,7 +139,7 @@ export default async function handler(req, res) {
       msgLower.includes("donde") ||
       msgLower.includes("dónde");
 
-    // Frases de compra ACTIVA (el cliente quiere HACER un pedido nuevo)
+    // Frases de registro o compra ACTIVA (el cliente quiere registrarse o HACER un pedido nuevo)
     const esFraseCompraActiva =
       msgLower === "pedido" ||
       msgLower === "compra" ||
@@ -147,6 +147,10 @@ export default async function handler(req, res) {
       msgLower === "catálogo" ||
       msgLower === "oferta" ||
       msgLower === "ofertas" ||
+      msgLower === "registro" ||
+      msgLower === "registrarme" ||
+      msgLower === "registrar" ||
+      msgLower === "registrarse" ||
       msgLower.includes("hacer pedido") ||
       msgLower.includes("hacer un pedido") ||
       msgLower.includes("quiero pedir") ||
@@ -160,7 +164,14 @@ export default async function handler(req, res) {
       msgLower.includes("comprar") ||
       msgLower.includes("catálogo") ||
       msgLower.includes("catalogo") ||
-      msgLower.includes("oferta");
+      msgLower.includes("oferta") ||
+      msgLower.includes("quiero registrar") ||
+      msgLower.includes("cómo me registro") ||
+      msgLower.includes("como me registro") ||
+      msgLower.includes("enlace de registro") ||
+      msgLower.includes("link de registro") ||
+      msgLower.includes("enlace para registrarme") ||
+      msgLower.includes("link para registrarme");
 
     // Es intención de pedido SOLO si es frase activa Y NO es consulta de estado
     const esIntencionPedido = esFraseCompraActiva && !esConsultaEstado;
@@ -216,7 +227,16 @@ export default async function handler(req, res) {
             console.error("[whatsapp-incoming] Error creando sesión:", sesionError.message);
             responseText = `¡Hola ${cliente.nombre_contacto}! Tuvimos un detalle técnico al generar tu enlace de compra. Por favor, intenta de nuevo escribiendo "pedido" en unos momentos.`;
           } else {
-            responseText = `¡Hola ${cliente.nombre_contacto}! 👋 Abre este enlace para armar tu pedido de catálogo de ofertas de forma segura. El enlace expira en 2 horas:\n\n👉 https://lukeapp.me/pedido?token=${sesion.token}`;
+            const esPalabraRegistro = 
+              msgLower.includes("registr") || 
+              msgLower.includes("inscrib") || 
+              msgLower.includes("cuenta");
+            
+            if (esPalabraRegistro) {
+              responseText = `¡Hola ${cliente.nombre_contacto}! 👋 Veo que ya estás registrado en LukeDelivery. Para armar tu pedido, abre este enlace seguro (expira en 2 horas):\n\n👉 https://lukeapp.me/pedido?token=${sesion.token}`;
+            } else {
+              responseText = `¡Hola ${cliente.nombre_contacto}! 👋 Abre este enlace para armar tu pedido de catálogo de ofertas de forma segura. El enlace expira en 2 horas:\n\n👉 https://lukeapp.me/pedido?token=${sesion.token}`;
+            }
           }
         }
       } else {
@@ -358,11 +378,18 @@ ${infoVentanaPrompt}
 `;
 
         if (!cliente) {
+          let registrationUrl = `https://lukeapp.me/registro?phone=${phoneClean}`;
+          if (lidClean) {
+            registrationUrl += `&lid=${lidClean}`;
+          }
           promptSistema += `
-4. El usuario actual NO está registrado en LukeDelivery. Si te pregunta por productos, precios, ofertas o catálogo en su nota de voz o mensaje, NO le recites la lista de productos ni le des los precios detallados del catálogo. En su lugar, invítalo muy cordialmente a registrarse usando el enlace de registro, explicándole claramente que:
+
+4. El usuario actual NO está registrado en LukeDelivery. Si te pregunta por productos, precios, ofertas o catálogo en su nota de voz o mensaje, NO le recites la lista de productos ni le des los precios detallados del catálogo. En su lugar, invítalo muy cordialmente a registrarse usando el siguiente enlace de registro: ${registrationUrl}
+   Explicándole claramente que:
    - El registro es totalmente gratuito y sin ningún compromiso de compra.
    - Una vez registrado y al acceder a la sección de pedidos, podrá ver todo el catálogo completo de ofertas al costo.
    - El ingreso no implica compra obligatoria, puede mirar y cotizar con total tranquilidad.
+   - DEBES incluir este enlace exacto (${registrationUrl}) en tu respuesta de forma visible para que el usuario pueda registrarse. Nunca le digas "te enviaré el enlace" o "como asistente no puedo enviarte el enlace", entrégale el enlace en este mismo mensaje.
 `;
         }
 
