@@ -238,17 +238,30 @@ export default function RegistroPage() {
 
     const onError = (err) => {
       console.warn("[LukeDelivery GPS] Error high accuracy:", err.code, err.message);
-      // En iPhone, intentar con baja precisión como fallback y un timeout adecuado
+      
+      const ua = typeof window !== 'undefined' ? window.navigator.userAgent : '';
+      const isWhatsApp = /WhatsApp/i.test(ua);
+      const isIOS = /iPhone|iPad|iPod/i.test(ua);
+
+      const msgPermisoDenegado = isWhatsApp && isIOS
+        ? "Acceso denegado en WhatsApp. Toca el botón de tres puntos (...) abajo a la derecha de la barra y selecciona 'Abrir en Safari' para continuar (en Safari ya tienes la ubicación permitida). O ve a Ajustes del iPhone → WhatsApp → Localización y selecciona 'Al usar la app'."
+        : "Acceso a ubicación denegado. En iPhone (Safari): toca el botón 'aA' o el candado a la izquierda de la barra de direcciones de Safari, selecciona 'Ajustes del sitio web', cambia Ubicación a 'Permitir' y recarga la página. También puedes ir a Ajustes de iOS → Privacidad y seguridad → Localización → Safari y seleccionar 'Al usar la app'.";
+
+      if (err.code === 1) {
+        // PERMISSION_DENIED: Abortar de inmediato sin intentar fallback
+        setGpsStatus("error");
+        setGpsErrorMsg(msgPermisoDenegado);
+        return;
+      }
+
+      // En iPhone, intentar con baja precisión como fallback para errores de posición o tiempo de espera
       navigator.geolocation.getCurrentPosition(
         onSuccess,
         (err2) => {
-          console.warn("[LukeDelivery GPS] Error low accuracy fallback:", err2.code, err2.message);
+          console.log("[LukeDelivery GPS] Error low accuracy fallback:", err2.code, err2.message);
           setGpsStatus("error");
           if (err2.code === 1) {
-            // PERMISSION_DENIED
-            setGpsErrorMsg(
-              "Acceso a ubicación denegado. En iPhone (Safari): toca el botón 'aA' o el candado a la izquierda de la barra de direcciones de Safari, selecciona 'Ajustes del sitio web', cambia Ubicación a 'Permitir' y recarga la página. También puedes ir a Ajustes de iOS → Privacidad y seguridad → Localización → Safari y seleccionar 'Al usar la app'."
-            );
+            setGpsErrorMsg(msgPermisoDenegado);
           } else if (err2.code === 2) {
             // POSITION_UNAVAILABLE
             setGpsErrorMsg("No se pudo obtener tu ubicación. Asegúrate de estar al aire libre o cerca de una ventana e inténtalo de nuevo.");
