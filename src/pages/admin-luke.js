@@ -74,7 +74,7 @@ export default function AdminLukePage() {
     formato_venta: "",
     precio: "",
     precio_costo: "",
-    categoria_logistica: "Estándar",
+    tipo_bulto: "Estándar",
     url_imagen_retail: "",
     disponible: true,
     categoria: "Abarrotes"
@@ -737,7 +737,7 @@ export default function AdminLukePage() {
         formato_venta: producto.formato_venta,
         precio: producto.precio,
         precio_costo: producto.precio_costo,
-        categoria_logistica: producto.categoria_logistica,
+        tipo_bulto: producto.tipo_bulto,
         url_imagen_retail: producto.url_imagen_retail || "",
         disponible: producto.disponible,
         categoria: producto.categoria || "Abarrotes"
@@ -749,7 +749,7 @@ export default function AdminLukePage() {
         formato_venta: "",
         precio: "",
         precio_costo: "",
-        categoria_logistica: "Estándar",
+        tipo_bulto: "Estándar",
         url_imagen_retail: "",
         disponible: true,
         categoria: "Abarrotes"
@@ -772,7 +772,7 @@ export default function AdminLukePage() {
         formato_venta: productForm.formato_venta.trim(),
         precio: parseInt(productForm.precio),
         precio_costo: parseInt(productForm.precio_costo),
-        categoria_logistica: productForm.categoria_logistica,
+        tipo_bulto: productForm.tipo_bulto,
         url_imagen_retail: productForm.url_imagen_retail.trim() || null,
         disponible: productForm.disponible,
         categoria: productForm.categoria
@@ -1522,11 +1522,11 @@ export default function AdminLukePage() {
                           </div>
                           <div className="flex items-center gap-3">
                             <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                              prod.categoria_logistica === "Pesado"
+                              prod.tipo_bulto === "Pesado"
                                 ? "bg-accent/10 text-accent border border-accent/20"
                                 : "bg-brand/10 text-brand border border-brand/20"
                             }`}>
-                              {cleanText(prod.categoria_logistica)}
+                              {cleanText(prod.tipo_bulto)}
                             </span>
                             <div className="flex items-center gap-1.5 bg-bg-surface border border-border px-2 py-0.5 rounded-lg">
                               <span className="text-[9px] font-bold text-text-secondary">Disp</span>
@@ -1586,11 +1586,11 @@ export default function AdminLukePage() {
                             <td className="py-3 text-text-dim">${prod.precio_costo.toLocaleString("es-CL")}</td>
                             <td className="py-3">
                               <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                                prod.categoria_logistica === "Pesado"
+                                prod.tipo_bulto === "Pesado"
                                   ? "bg-accent/10 text-accent border border-accent/20"
                                   : "bg-brand/10 text-brand border border-brand/20"
                               }`}>
-                                {cleanText(prod.categoria_logistica)}
+                                {cleanText(prod.tipo_bulto)}
                               </span>
                             </td>
                             <td className="py-3 text-center">
@@ -1824,19 +1824,19 @@ export default function AdminLukePage() {
                 </div>
               </div>
 
-              {/* Categoría Logística */}
+              {/* Tipo de Bulto */}
               <div>
                 <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
-                  Categoría Logística
+                  Tipo de Bulto (Peso)
                 </label>
                 <div className="flex gap-2">
                   {["Estándar", "Pesado"].map((cat) => (
                     <button
                       key={cat}
-                      onClick={() => setProductForm({ ...productForm, categoria_logistica: cat })}
+                      onClick={() => setProductForm({ ...productForm, tipo_bulto: cat })}
                       type="button"
                       className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                        productForm.categoria_logistica === cat
+                        productForm.tipo_bulto === cat
                           ? "bg-brand text-white border-transparent"
                           : "text-text-dim bg-bg-surface-2 border-border hover:border-white/10"
                       }`}

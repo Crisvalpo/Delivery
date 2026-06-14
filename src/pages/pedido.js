@@ -339,7 +339,7 @@ export default function PedidoPage() {
                 <span className="text-5xl font-black text-slate-800 leading-none">
                   {(3000 + Object.entries(carrito).reduce((sum, [id, cant]) => {
                     const p = productos.find(prod => prod.id === id);
-                    return sum + (p && p.categoria_logistica === "Pesado" ? 500 * cant : 0);
+                    return sum + (p && p.tipo_bulto === "Pesado" ? 500 * cant : 0);
                   }, 0)).toLocaleString("es-CL")}
                 </span>
               </div>
@@ -548,7 +548,7 @@ export default function PedidoPage() {
                                 {p.nombre.charAt(0)}
                               </div>
                             )}
-                            {p.categoria_logistica === "Pesado" && (
+                            {p.tipo_bulto === "Pesado" && (
                               <div className="absolute top-0 left-0 bg-accent text-black text-[8px] font-black px-1.5 py-0.5 rounded-br-lg uppercase">
                                 PESADO
                               </div>

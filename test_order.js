@@ -48,7 +48,7 @@ async function runTest() {
     console.log('\nConsultando productos en Supabase...');
     const { data: productos, error: prodErr } = await supabase
       .from('productos')
-      .select('id, nombre, precio, categoria_logistica')
+      .select('id, nombre, precio, tipo_bulto')
       .eq('disponible', true)
       .limit(3);
 
@@ -59,7 +59,7 @@ async function runTest() {
     }
 
     console.log(`Productos encontrados: ${productos.length}`);
-    productos.forEach(p => console.log(`- [${p.categoria_logistica}] ${p.nombre}: $${p.precio}`));
+    productos.forEach(p => console.log(`- [${p.tipo_bulto}] ${p.nombre}: $${p.precio}`));
 
     // 4. Armar el payload para la API de pedido
     // Necesitamos superar los $35.000 para cumplir la regla del furgón.

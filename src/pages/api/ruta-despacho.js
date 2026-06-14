@@ -105,7 +105,7 @@ export default async function handler(req, res) {
             productos (
               nombre,
               formato_venta,
-              categoria_logistica
+              tipo_bulto
             )
           )
         `)

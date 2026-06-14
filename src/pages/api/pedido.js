@@ -70,7 +70,7 @@ export default async function handler(req, res) {
     const ids = productos_seleccionados.map((p) => p.id);
     const { data: dbProds, error: prodErr } = await supabase
       .from("productos")
-      .select("id, nombre, formato_venta, precio, precio_costo, categoria_logistica")
+      .select("id, nombre, formato_venta, precio, precio_costo, tipo_bulto")
       .in("id", ids);
 
     if (prodErr) {
@@ -105,7 +105,7 @@ export default async function handler(req, res) {
       totalNeto += db.precio * cant;
       totalCosto += db.precio_costo * cant;
 
-      if (db.categoria_logistica === "Pesado") {
+      if (db.tipo_bulto === "Pesado") {
         bultosPesados += cant;
       }
 
@@ -116,7 +116,7 @@ export default async function handler(req, res) {
         precioUnitario: db.precio,
         cantidad: cant,
         totalItem: db.precio * cant,
-        categoria: db.categoria_logistica,
+        categoria: db.tipo_bulto,
       });
     }
 
@@ -335,7 +335,7 @@ export default async function handler(req, res) {
         precio_unitario, 
         total_item, 
         estado, 
-        productos (nombre, formato_venta, categoria_logistica)
+        productos (nombre, formato_venta, tipo_bulto)
       `)
       .eq("pedido_id", pedidoId);
 
@@ -355,7 +355,7 @@ export default async function handler(req, res) {
       precioUnitario: it.precio_unitario,
       cantidad: it.cantidad,
       totalItem: it.total_item,
-      categoria: it.productos?.categoria_logistica || "Normal",
+      categoria: it.productos?.tipo_bulto || "Normal",
       estado: it.estado
     }));
 

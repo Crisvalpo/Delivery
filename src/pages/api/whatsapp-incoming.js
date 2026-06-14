@@ -891,10 +891,10 @@ ${urlImagenPublicaTemp}
                         type: "INTEGER",
                         description: "El precio de costo del mayorista como entero en pesos (ej. 10000)"
                       },
-                      categoria_logistica: {
+                      tipo_bulto: {
                         type: "STRING",
                         enum: ["Pesado", "Estándar"],
-                        description: "La categoría logística. Opcional. Usa 'Pesado' si pesa más de 5kg o es muy grande/voluminoso, de lo contrario no la envíes (el sistema la asumirá como 'Estándar')."
+                        description: "Clasificación por peso/volumen del bulto. Opcional. Usa 'Pesado' si pesa más de 5kg o es muy grande/voluminoso, de lo contrario no la envíes (el sistema la asumirá como 'Estándar')."
                       },
                       categoria: {
                         type: "STRING",
@@ -963,10 +963,10 @@ ${urlImagenPublicaTemp}
                         type: "STRING",
                         description: "La nueva URL de la imagen del producto (opcional)."
                       },
-                      nueva_categoria_logistica: {
+                      nuevo_tipo_bulto: {
                         type: "STRING",
                         enum: ["Pesado", "Estándar"],
-                        description: "La nueva categoría logística (opcional)."
+                        description: "El nuevo tipo de bulto o peso del producto (opcional)."
                       },
                       nueva_categoria: {
                         type: "STRING",
@@ -1299,7 +1299,7 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                   }
                 } 
                 else if (name === "crear_producto") {
-                  const { nombre, formato_venta, precio, precio_costo, categoria_logistica, url_imagen_retail, categoria } = args;
+                  const { nombre, formato_venta, precio, precio_costo, tipo_bulto, url_imagen_retail, categoria } = args;
                   
                   let precioVentaFinal = precio;
                   let margenAplicado = null;
@@ -1315,7 +1315,7 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                     ? url_imagen_retail.trim()
                     : "https://cdn.pesco.cl/wp-content/uploads/2021/03/producto_sin_imagen.png";
 
-                  const finalLogistica = categoria_logistica || "Estándar";
+                  const finalBulto = tipo_bulto || "Estándar";
 
                   const { error } = await supabase
                     .from("productos")
@@ -1325,7 +1325,7 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                       precio: precioVentaFinal,
                       precio_costo,
                       categoria: categoria || "Abarrotes",
-                      categoria_logistica: finalLogistica,
+                      tipo_bulto: finalBulto,
                       url_imagen_retail: finalImgUrl,
                       disponible: true,
                       activo: true
@@ -1358,13 +1358,13 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                     : `Éxito: El producto que coincide con "${nombre_producto}" ha sido desactivado del catálogo con éxito.`;
                 }
                 else if (name === "actualizar_detalles_producto") {
-                  const { nombre_producto, nuevo_nombre, nuevo_formato_venta, nueva_url_imagen, nueva_categoria_logistica, nueva_categoria } = args;
+                  const { nombre_producto, nuevo_nombre, nuevo_formato_venta, nueva_url_imagen, nuevo_tipo_bulto, nueva_categoria } = args;
                   
                   const updates = {};
                   if (nuevo_nombre !== undefined) updates.nombre = nuevo_nombre;
                   if (nuevo_formato_venta !== undefined) updates.formato_venta = nuevo_formato_venta;
                   if (nueva_url_imagen !== undefined) updates.url_imagen_retail = nueva_url_imagen;
-                  if (nueva_categoria_logistica !== undefined) updates.categoria_logistica = nueva_categoria_logistica;
+                  if (nuevo_tipo_bulto !== undefined) updates.tipo_bulto = nuevo_tipo_bulto;
                   if (nueva_categoria !== undefined) updates.categoria = nueva_categoria;
 
                   if (Object.keys(updates).length === 0) {
