@@ -108,7 +108,7 @@ export default async function handler(req, res) {
 
     const { data: clientes, error: clientError } = await supabase
       .from("clientes")
-      .select("id, nombre_contacto, nombre_tienda, whatsapp, whatsapp_lid, bot_silenciado_hasta")
+      .select("id, nombre_contacto, nombre_tienda, whatsapp, whatsapp_lid, bot_silenciado_hasta, registro_completo")
       .or(orConditions);
 
     if (clientError) {
@@ -117,6 +117,25 @@ export default async function handler(req, res) {
     }
 
     const cliente = clientes && clientes.length > 0 ? clientes[0] : null;
+
+    // 1.2. Buscar si el remitente es un trabajador activo
+    const { data: trabajadores, error: workerError } = await supabase
+      .from("trabajadores")
+      .select("id, nombre, whatsapp, rol, activo")
+      .eq("activo", true)
+      .or(`whatsapp.eq.${phoneClean},whatsapp.eq.${phoneWithPlus}`);
+
+    if (workerError) {
+      console.error("[whatsapp-incoming] Error buscando trabajador:", workerError.message);
+    }
+
+    const trabajador = trabajadores && trabajadores.length > 0 ? trabajadores[0] : null;
+
+    // 1.3. Clasificación de perfiles de usuario
+    const esTrabajador = trabajador && trabajador.activo;
+    const esClienteRegistrado = cliente && cliente.registro_completo === true;
+    const esPreRegistro = cliente && cliente.registro_completo === false;
+    const esNoRegistrado = !esTrabajador && !esClienteRegistrado;
 
     // 1.5. Validar si el número (registrado o no) está silenciado en la tabla whatsapp_bloqueos
     const { data: bloqueo, error: bloqueoErr } = await supabase
@@ -256,9 +275,14 @@ export default async function handler(req, res) {
           .eq("id", cliente.id);
       }
 
-      const responseText = cliente
-        ? `Entendido, ${cliente.nombre_contacto}. He pausado mis respuestas automáticas por 24 horas para que un asesor de LukeDelivery revise tu chat y te contacte directamente. ¡Que tengas un buen día! 📦`
-        : `Entendido. He pausado mis respuestas automáticas por 24 horas para que un asesor de LukeDelivery revise tu chat y te contacte directamente. ¡Te escribiremos pronto! 📦`;
+      let responseText = `Entendido. He pausado mis respuestas automáticas por 24 horas para que un asesor de LukeDelivery revise tu chat y te contacte directamente. ¡Te escribiremos pronto! 📦`;
+      if (esTrabajador) {
+        responseText = `Entendido, ${trabajador.nombre}. Como eres ${trabajador.rol} del equipo, he pausado las respuestas automáticas para ti por 24 horas. Si necesitas algo urgente, por favor comunícate directamente con la administración.`;
+      } else if (esClienteRegistrado) {
+        responseText = `Entendido, ${cliente.nombre_contacto}. He pausado mis respuestas automáticas por 24 horas para que un asesor de LukeDelivery revise tu chat y te contacte directamente. ¡Que tengas un buen día! 📦`;
+      } else if (esPreRegistro) {
+        responseText = `Entendido, ${cliente.nombre_contacto}. Veo que estás en proceso de registro de tu tienda. He pausado mis respuestas automáticas por 24 horas para que un asesor de soporte te guíe directamente a completar tu cuenta.`;
+      }
 
       // Registrar en historial
       try {
@@ -366,8 +390,8 @@ export default async function handler(req, res) {
       msgLower.includes("enlace para registrarme") ||
       msgLower.includes("link para registrarme");
 
-    // Es intención de pedido SOLO si es frase activa Y NO es consulta de estado
-    const esIntencionPedido = esFraseCompraActiva && !esConsultaEstado;
+    // Es intención de pedido SOLO si es frase activa, no es consulta de estado, y NO es un trabajador del equipo
+    const esIntencionPedido = esFraseCompraActiva && !esConsultaEstado && !esTrabajador;
 
     let responseText = "";
     let audioBase64ParaEnviar = null;
@@ -578,8 +602,21 @@ Reglas de Negocio Críticas (No negociables):
 ${infoVentanaPrompt}
 `;
 
-        // MEJORA 2: Contexto enriquecido del cliente en el prompt de Gemini
-        if (cliente) {
+        // MEJORA 2: Contexto enriquecido según el perfil del usuario en el prompt de Gemini
+        if (esTrabajador) {
+          promptSistema += `
+          
+--- PERFIL DEL REMITENTE ---
+El usuario con el que estás interactuando es un TRABAJADOR de LukeDelivery.
+- Nombre: ${trabajador.nombre}
+- Rol en la empresa: ${trabajador.rol}
+
+Instrucciones para atender a este trabajador:
+1. Salúdalo amigablemente por su nombre (${trabajador.nombre}) y haz referencia a su rol de manera cercana.
+2. Dado que es parte del equipo, no le des links de compra ni le sugieras registrar su almacén (a menos que él te pida explícitamente el link de registro para un tercero).
+3. Responde de manera profesional a sus consultas del catálogo o de inventario.
+`;
+        } else if (esClienteRegistrado) {
           const { data: pedidosRecientes } = await supabase
             .from("pedidos")
             .select("id, created_at, estado")
@@ -590,23 +627,54 @@ ${infoVentanaPrompt}
           const ultimoPedido = pedidosRecientes && pedidosRecientes.length > 0
             ? new Date(pedidosRecientes[0].created_at).toLocaleDateString("es-CL", { day: "numeric", month: "short", year: "numeric" })
             : null;
-          promptSistema += `\n\nCliente en esta conversación:\n- Nombre: ${cliente.nombre_contacto}\n- Tienda: ${cliente.nombre_tienda || "No especificada"}\n- Pedidos registrados (últimos 5 consultados): ${totalPedidos}${ultimoPedido ? `\n- Último pedido: ${ultimoPedido}` : ""}\nLlama al cliente por su nombre (${cliente.nombre_contacto}) de forma natural en la conversación.`;
-        }
+          promptSistema += `
+          
+--- PERFIL DEL REMITENTE ---
+El usuario con el que estás interactuando es un CLIENTE ALMACENERO REGISTRADO.
+- Nombre del Dueño: ${cliente.nombre_contacto}
+- Nombre de su Tienda/Negocio: ${cliente.nombre_tienda || "No especificada"}
+- Pedidos registrados (últimos 5 consultados): ${totalPedidos}${ultimoPedido ? `\n- Último pedido: ${ultimoPedido}` : ""}
 
-        if (!cliente) {
+Instrucciones para atender a este cliente:
+1. Llámalo por su nombre (${cliente.nombre_contacto}) de forma natural en la conversación.
+2. Trátalo como un comerciante aliado. Si quiere comprar o ver ofertas, recuérdale que puede escribir "pedido" en cualquier momento para enviarle su link seguro de compra.
+`;
+        } else {
+          // Es usuario no registrado o en proceso de pre-registro
           let registrationUrl = `https://lukeapp.me/registro?phone=${phoneClean}`;
           if (lidClean) {
             registrationUrl += `&lid=${lidClean}`;
           }
-          promptSistema += `
 
-4. El usuario actual NO está registrado en LukeDelivery. Si te pregunta por productos, precios, ofertas o catálogo en su nota de voz o mensaje, NO le recites la lista de productos ni le des los precios detallados del catálogo. En su lugar, invítalo muy cordialmente a registrarse usando el siguiente enlace de registro: ${registrationUrl}
-   Explicándole claramente que:
+          if (esPreRegistro) {
+            promptSistema += `
+            
+--- PERFIL DEL REMITENTE ---
+El usuario es un CLIENTE EN PROCESO DE REGISTRO (Pre-registro temporal creado por ti).
+- Nombre del Dueño: ${cliente.nombre_contacto}
+- Nombre de la Tienda: ${cliente.nombre_tienda || "No especificada"}
+
+Instrucciones para atender a este cliente:
+1. Llámalo por su nombre (${cliente.nombre_contacto}) de forma amigable.
+2. Explícale que ya has tomado sus datos principales, pero para poder ver los precios del catálogo y habilitar sus compras es estrictamente necesario que termine de configurar la geolocalización y sector de su negocio accediendo a este link: ${registrationUrl}
+3. DEBES incluir este enlace exacto (${registrationUrl}) de forma visible en tu respuesta para que complete su cuenta.
+`;
+          } else {
+            promptSistema += `
+            
+--- PERFIL DEL REMITENTE ---
+El usuario actual NO está registrado en LukeDelivery.
+
+Instrucciones para atender a este usuario:
+1. Si te pregunta por productos, precios, ofertas o catálogo en su nota de voz o mensaje, NO le recites la lista de productos ni le des los precios detallados del catálogo. En su lugar, invítalo muy cordialmente a registrarse usando el siguiente enlace de registro: ${registrationUrl}
+2. Explícale claramente que:
    - El registro es totalmente gratuito y sin ningún compromiso de compra.
    - Una vez registrado y al acceder a la sección de pedidos, podrá ver todo el catálogo completo de ofertas al costo.
    - El ingreso no implica compra obligatoria, puede mirar y cotizar con total tranquilidad.
-   - DEBES incluir este enlace exacto (${registrationUrl}) en tu respuesta de forma visible para que el usuario pueda registrarse. Nunca le digas "te enviaré el enlace" o "como asistente no puedo enviarte el enlace", entrégale el enlace en este mismo mensaje.
+3. DEBES incluir este enlace exacto (${registrationUrl}) en tu respuesta de forma visible para que el usuario pueda registrarse. Nunca le digas "te enviaré el enlace", entrégalo en este mismo mensaje.
+4. Recuerda que si el usuario te proporciona su Nombre de contacto y Nombre de su Tienda voluntariamente, debes invocar la herramienta "guardar_datos_registro_temporal" para iniciar su pre-registro y hacer su proceso más simple.
 `;
+          }
         }
 
         // MEJORAS 3 y 4: Historial con filtro de 30 días y soporte de resúmenes de conversación
@@ -635,8 +703,17 @@ ${infoVentanaPrompt}
         }
         historialTexto += historialCronologico.length > 0
           ? historialCronologico.map(m => {
-              const role = m.remitente === "usuario" ? "Cliente" : "Jaime";
-              return `${role}: ${m.contenido}`;
+              let roleName = "Usuario";
+              if (m.remitente === "asistente") {
+                roleName = "Jaime";
+              } else if (esTrabajador) {
+                roleName = trabajador.rol || "Trabajador";
+              } else if (esClienteRegistrado) {
+                roleName = "Cliente";
+              } else {
+                roleName = "Usuario No Registrado";
+              }
+              return `${roleName}: ${m.contenido}`;
             }).join("\n")
           : "No hay mensajes recientes.";
         if (!historialTexto.trim()) historialTexto = "No hay historial de conversación reciente.";
@@ -651,14 +728,7 @@ ${infoVentanaPrompt}
         }
 
         // 3. Validar si el remitente es un trabajador activo y su rol para habilitar herramientas
-        const { data: trabajador } = await supabase
-          .from("trabajadores")
-          .select("nombre, rol")
-          .eq("whatsapp", phoneClean)
-          .eq("activo", true)
-          .maybeSingle();
-
-        const esAdmin = trabajador && (trabajador.rol === "Administrador" || trabajador.rol === "Vendedor");
+        const esAdmin = esTrabajador && (trabajador.rol === "Administrador" || trabajador.rol === "Vendedor");
 
         // 4. Declarar herramientas basicas y de administrador
         const basicTools = [
