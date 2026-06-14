@@ -33,6 +33,13 @@ export default async function handler(req, res) {
         .json({ success: false, message: "Enlace no válido. Solicita uno nuevo." });
     }
 
+    // 2. Verificar si ya fue usado
+    if (sesion.usado) {
+      console.warn(`[validar-token] Intento de re-uso de token: ${token}`);
+      return res
+        .status(403)
+        .json({ success: false, message: "Este enlace ya fue utilizado. Por favor, solicita uno nuevo en WhatsApp." });
+    }
 
     // 3. Verificar si expiró
     const expiraAt = new Date(sesion.expira_at);
