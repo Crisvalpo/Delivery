@@ -1065,7 +1065,13 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
 
           // --- PASO 2: Síntesis de voz (TTS) si la entrada fue audio ---
           // Solo si el usuario envió nota de voz, convertimos la respuesta de texto a audio.
-          if (tieneAudioEntrante && responseText) {
+          // Excepción crítica: si la respuesta contiene un enlace (link) como URL de registro o pedido,
+          // forzamos el envío de texto para que el usuario pueda hacer clic sobre él.
+          const contieneLink = responseText.includes("http://") || responseText.includes("https://") || responseText.includes("lukeapp.me");
+          if (tieneAudioEntrante && responseText && contieneLink) {
+            console.log("[whatsapp-incoming] 🔗 La respuesta contiene un enlace. Se enviará como texto para permitir hacer clic.");
+          }
+          if (tieneAudioEntrante && responseText && !contieneLink) {
             try {
               const ttsModelName = "gemini-2.5-flash-preview-tts";
               console.log(`[whatsapp-incoming] Convirtiendo respuesta a audio con modelo TTS: ${ttsModelName}`);
