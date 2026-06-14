@@ -946,7 +946,7 @@ export default function AdminLukePage() {
       </Head>
 
       {/* ===== TOP BAR ===== */}
-      <header className="shrink-0 bg-bg-surface/95 backdrop-blur-lg border-b border-border px-4 py-3 flex items-center justify-between z-30">
+      <header className="relative shrink-0 bg-bg-surface/95 backdrop-blur-lg border-b border-border px-4 py-3 flex items-center justify-between z-[9999]">
         <div className="flex items-center gap-2.5">
           <div className="bg-brand/15 p-1.5 rounded-lg">
             <MapPin className="h-4 w-4 text-brand" />
