@@ -450,7 +450,7 @@ ${infoVentanaPrompt}
               ...(esAdmin ? [
                 {
                   name: "actualizar_precio_producto",
-                  description: "Actualiza el precio de venta de un producto en el catálogo. Usa esta función cuando el administrador indique que el precio de un producto cambió, varió o debe ser modificado.",
+                  description: "Actualiza el precio de venta y/o el precio de costo de un producto en el catálogo. Usa esta función cuando el administrador indique que el precio (de venta o de costo/mayorista) de un producto cambió, varió o debe ser modificado. Si solo se indica el precio de costo, calcula automáticamente el nuevo precio de venta aplicando el margen configurado.",
                   parameters: {
                     type: "OBJECT",
                     properties: {
@@ -460,10 +460,14 @@ ${infoVentanaPrompt}
                       },
                       nuevo_precio: {
                         type: "INTEGER",
-                        description: "El nuevo precio de venta como número entero en pesos chilenos (sin puntos ni signos, ej. 10000)"
+                        description: "El nuevo precio de VENTA (al público) como número entero en pesos chilenos (opcional). Si no se especifica pero sí se indica nuevo_precio_costo, se calculará automáticamente."
+                      },
+                      nuevo_precio_costo: {
+                        type: "INTEGER",
+                        description: "El nuevo precio de COSTO (mayorista) como número entero en pesos chilenos (opcional). Si se indica este parámetro y no se indica nuevo_precio, el precio de venta se recalcula automáticamente con el margen configurado."
                       }
                     },
-                    required: ["nombre_producto", "nuevo_precio"]
+                    required: ["nombre_producto"]
                   }
                 },
                 {
@@ -756,15 +760,45 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
                   }
                 }
                 else if (name === "actualizar_precio_producto") {
-                  const { nombre_producto, nuevo_precio } = args;
-                  const { error } = await supabase
-                    .from("productos")
-                    .update({ precio: nuevo_precio })
-                    .ilike("nombre", `%${nombre_producto}%`);
-                  
-                  dbResult = error 
-                    ? `Error al actualizar: ${error.message}` 
-                    : `Éxito: El precio del producto que coincide con "${nombre_producto}" ha sido actualizado a $${nuevo_precio.toLocaleString("es-CL")} con éxito.`;
+                  const { nombre_producto, nuevo_precio, nuevo_precio_costo } = args;
+
+                  if (!nuevo_precio && !nuevo_precio_costo) {
+                    dbResult = "Error: Debes indicar al menos el nuevo precio de venta (nuevo_precio) o el nuevo precio de costo (nuevo_precio_costo).";
+                  } else {
+                    const updates = {};
+
+                    // Si se indica precio de costo, lo guardamos
+                    if (nuevo_precio_costo !== undefined && nuevo_precio_costo !== null) {
+                      updates.precio_costo = nuevo_precio_costo;
+                    }
+
+                    // Si se indica precio de venta explicitamente, usarlo
+                    if (nuevo_precio !== undefined && nuevo_precio !== null) {
+                      updates.precio = nuevo_precio;
+                    } else if (nuevo_precio_costo !== undefined && nuevo_precio_costo !== null) {
+                      // Solo se indicó el costo: recalcular precio de venta con margen configurado
+                      const margenCfg = dbConfigs ? dbConfigs.find(c => c.clave === "margen_ganancia") : null;
+                      const margenPct = margenCfg ? parseFloat(margenCfg.valor) : 20;
+                      updates.precio = Math.round(nuevo_precio_costo * (1 + margenPct / 100));
+                    }
+
+                    const { error } = await supabase
+                      .from("productos")
+                      .update(updates)
+                      .ilike("nombre", `%${nombre_producto}%`);
+
+                    if (error) {
+                      dbResult = `Error al actualizar: ${error.message}`;
+                    } else {
+                      const partes = [];
+                      if (updates.precio_costo !== undefined) partes.push(`precio de costo: $${updates.precio_costo.toLocaleString("es-CL")}`);
+                      if (updates.precio !== undefined) partes.push(`precio de venta: $${updates.precio.toLocaleString("es-CL")}`);
+                      const autoCalc = (nuevo_precio === undefined || nuevo_precio === null) && (nuevo_precio_costo !== undefined && nuevo_precio_costo !== null)
+                        ? " (precio de venta calculado automáticamente con el margen configurado)"
+                        : "";
+                      dbResult = `Éxito: El producto "${nombre_producto}" fue actualizado. Cambios: ${partes.join(" y ")}${autoCalc}.`;
+                    }
+                  }
                 } 
                 else if (name === "crear_producto") {
                   const { nombre, formato_venta, precio, precio_costo, categoria_logistica, url_imagen_retail } = args;
