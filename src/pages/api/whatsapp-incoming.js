@@ -144,7 +144,7 @@ export default async function handler(req, res) {
       .eq("whatsapp", phoneClean)
       .maybeSingle();
 
-    if (!bloqueoErr && bloqueo && new Date(bloqueo.silenciado_hasta) > new Date()) {
+    if (!esTrabajador && !bloqueoErr && bloqueo && new Date(bloqueo.silenciado_hasta) > new Date()) {
       console.log(`[whatsapp-incoming] Remitente ${phoneClean} está silenciado en whatsapp_bloqueos hasta ${bloqueo.silenciado_hasta} por: ${bloqueo.motivo}. Ignorando mensaje.`);
       return res.status(200).json({ success: true, message: "Bot silenciado temporalmente por desviación." });
     }
@@ -1007,29 +1007,33 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
 
               try {
                 if (name === "silenciar_usuario_por_desviacion") {
-                  const { motivo } = args;
-                  const cincoHorasMas = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
-                  
-                  // Guardar bloqueo de forma universal en whatsapp_bloqueos (registrados y no registrados)
-                  const { error: errorBloqueo } = await supabase
-                    .from("whatsapp_bloqueos")
-                    .upsert({
-                      whatsapp: phoneClean,
-                      silenciado_hasta: cincoHorasMas,
-                      motivo: motivo
-                    });
+                  if (esTrabajador) {
+                    dbResult = `Error: El remitente es un trabajador activo del equipo de LukeDelivery (${trabajador.nombre}) y los trabajadores NUNCA deben ser silenciados o bloqueados bajo ninguna circunstancia. Explícale amigablemente el desvío comercial si corresponde, pero omite cualquier mensaje de bloqueo y continúa asistiéndolo de manera normal.`;
+                  } else {
+                    const { motivo } = args;
+                    const cincoHorasMas = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
+                    
+                    // Guardar bloqueo de forma universal en whatsapp_bloqueos (registrados y no registrados)
+                    const { error: errorBloqueo } = await supabase
+                      .from("whatsapp_bloqueos")
+                      .upsert({
+                        whatsapp: phoneClean,
+                        silenciado_hasta: cincoHorasMas,
+                        motivo: motivo
+                      });
 
-                  // Por retrocompatibilidad, si es un cliente registrado, también actualizamos su campo en clientes
-                  if (cliente) {
-                    await supabase
-                      .from("clientes")
-                      .update({ bot_silenciado_hasta: cincoHorasMas })
-                      .eq("id", cliente.id);
+                    // Por retrocompatibilidad, si es un cliente registrado, también actualizamos su campo en clientes
+                    if (cliente) {
+                      await supabase
+                        .from("clientes")
+                        .update({ bot_silenciado_hasta: cincoHorasMas })
+                        .eq("id", cliente.id);
+                    }
+
+                    dbResult = errorBloqueo
+                      ? `Error al silenciar en bloqueos: ${errorBloqueo.message}`
+                      : `Éxito: El usuario ha sido bloqueado en Supabase hasta ${cincoHorasMas} debido a: ${motivo}. Debes avisarle claramente al usuario en tu respuesta que debido a que sus consultas se desvían de las compras, tu sistema se pausará y no podrás responderle en las próximas 5 horas.`;
                   }
-
-                  dbResult = errorBloqueo
-                    ? `Error al silenciar en bloqueos: ${errorBloqueo.message}`
-                    : `Éxito: El usuario ha sido bloqueado en Supabase hasta ${cincoHorasMas} debido a: ${motivo}. Debes avisarle claramente al usuario en tu respuesta que debido a que sus consultas se desvían de las compras, tu sistema se pausará y no podrás responderle en las próximas 5 horas.`;
                 }
                 else if (name === "solicitar_soporte_humano") {
                   const veinticuatroHorasMas = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
