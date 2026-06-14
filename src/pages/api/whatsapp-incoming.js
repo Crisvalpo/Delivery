@@ -609,6 +609,7 @@ Reglas de Negocio Críticas (No negociables):
 3. Si el administrador proporciona explícitamente tanto el precio de costo como el precio de venta, llama a "crear_producto" pasando ambos parámetros.
 4. Información del estado de Ventanas de Pedidos y despachos:
 ${infoVentanaPrompt}
+5. Al crear o actualizar un producto, debes clasificarlo de forma precisa y obligatoria en la categoría comercial más adecuada según el producto, usando estrictamente una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería' o 'Bebidas'.
 `;
 
         // MEJORA 2: Contexto enriquecido según el perfil del usuario en el prompt de Gemini
@@ -895,12 +896,17 @@ ${urlImagenPublicaTemp}
                         enum: ["Pesado", "Estándar"],
                         description: "La categoría logística. Opcional. Usa 'Pesado' si pesa más de 5kg o es muy grande/voluminoso, de lo contrario no la envíes (el sistema la asumirá como 'Estándar')."
                       },
+                      categoria: {
+                        type: "STRING",
+                        enum: ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"],
+                        description: "La categoría comercial del producto. Debe ser estrictamente una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería', 'Bebidas'. Es requerida."
+                      },
                       url_imagen_retail: {
                         type: "STRING",
                         description: "La URL directa de la imagen del producto (opcional). Solo suministrar si el usuario la provee explícitamente en el mensaje."
                       }
                     },
-                    required: ["nombre", "formato_venta", "precio_costo"]
+                    required: ["nombre", "formato_venta", "precio_costo", "categoria"]
                   }
                 },
                 {
@@ -961,6 +967,11 @@ ${urlImagenPublicaTemp}
                         type: "STRING",
                         enum: ["Pesado", "Estándar"],
                         description: "La nueva categoría logística (opcional)."
+                      },
+                      nueva_categoria: {
+                        type: "STRING",
+                        enum: ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"],
+                        description: "La nueva categoría comercial del producto (opcional). Debe ser una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería', 'Bebidas'."
                       }
                     },
                     required: ["nombre_producto"]
@@ -1288,7 +1299,7 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                   }
                 } 
                 else if (name === "crear_producto") {
-                  const { nombre, formato_venta, precio, precio_costo, categoria_logistica, url_imagen_retail } = args;
+                  const { nombre, formato_venta, precio, precio_costo, categoria_logistica, url_imagen_retail, categoria } = args;
                   
                   let precioVentaFinal = precio;
                   let margenAplicado = null;
@@ -1313,6 +1324,7 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                       formato_venta,
                       precio: precioVentaFinal,
                       precio_costo,
+                      categoria: categoria || "Abarrotes",
                       categoria_logistica: finalLogistica,
                       url_imagen_retail: finalImgUrl,
                       disponible: true,
@@ -1346,13 +1358,14 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                     : `Éxito: El producto que coincide con "${nombre_producto}" ha sido desactivado del catálogo con éxito.`;
                 }
                 else if (name === "actualizar_detalles_producto") {
-                  const { nombre_producto, nuevo_nombre, nuevo_formato_venta, nueva_url_imagen, nueva_categoria_logistica } = args;
+                  const { nombre_producto, nuevo_nombre, nuevo_formato_venta, nueva_url_imagen, nueva_categoria_logistica, nueva_categoria } = args;
                   
                   const updates = {};
                   if (nuevo_nombre !== undefined) updates.nombre = nuevo_nombre;
                   if (nuevo_formato_venta !== undefined) updates.formato_venta = nuevo_formato_venta;
                   if (nueva_url_imagen !== undefined) updates.url_imagen_retail = nueva_url_imagen;
                   if (nueva_categoria_logistica !== undefined) updates.categoria_logistica = nueva_categoria_logistica;
+                  if (nueva_categoria !== undefined) updates.categoria = nueva_categoria;
 
                   if (Object.keys(updates).length === 0) {
                     dbResult = "Error: No se especificaron campos válidos para actualizar.";
