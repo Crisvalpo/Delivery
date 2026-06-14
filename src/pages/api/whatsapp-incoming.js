@@ -1,5 +1,48 @@
 import { createAdminClient } from "../../lib/supabase/server";
 
+// ============================================================
+// MEJORA 5: Cache en memoria del catálogo de productos
+// Se invalida cada 5 minutos para reflejar cambios de precios
+// ============================================================
+let catalogoCache = { text: null, ts: 0 };
+const CATALOGO_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+// ============================================================
+// MEJORA 4: Genera y guarda un resumen de conversación
+// Se llama de forma asíncrona (fire & forget) sin bloquear la respuesta al usuario
+// ============================================================
+async function generarYGuardarResumen(supabase, phoneClean, historialTextoParaResumen, geminiKey, modelName) {
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: `Eres un asistente que resume conversaciones de WhatsApp de ventas mayoristas de forma ultra concisa.\nResume la siguiente conversación en máximo 3 líneas en español, en tercera persona.\nCaptura solo: temas consultados, productos mencionados y decisiones tomadas. No incluyas saludos ni datos personales.\n\nConversación:\n${historialTextoParaResumen}\n\nResumen conciso:`
+            }]
+          }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 250 }
+        })
+      }
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+    const resumenTexto = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (!resumenTexto) return;
+    await supabase.from("mensajes_chat").insert([{
+      whatsapp: phoneClean,
+      remitente: "resumen",
+      contenido: resumenTexto
+    }]);
+    console.log(`[whatsapp-incoming] ✅ Resumen de conversación generado para ${phoneClean}`);
+  } catch (e) {
+    console.error("[whatsapp-incoming] Error al generar resumen de conversación:", e.message);
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
@@ -78,16 +121,21 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, message: "Bot silenciado temporalmente por desviación." });
     }
 
-    // Registrar mensaje de entrada en el historial
+    // MEJORA 1: Registrar mensaje de entrada en el historial
+    // Para notas de voz, guardamos placeholder temporal que se actualizará con la transcripción real
     const textoMensaje = audio ? "[Nota de Voz]" : message;
+    let mensajeChatId = null;
     try {
-      await supabase
+      const { data: msgInsertado } = await supabase
         .from("mensajes_chat")
         .insert([{
           whatsapp: phoneClean,
           remitente: "usuario",
           contenido: textoMensaje
-        }]);
+        }])
+        .select("id")
+        .single();
+      if (msgInsertado) mensajeChatId = msgInsertado.id;
     } catch (histErr) {
       console.error("[whatsapp-incoming] Error guardando mensaje en historial:", histErr.message);
     }
@@ -249,16 +297,24 @@ export default async function handler(req, res) {
       }
     } else {
       // 2. No es intención directa de pedido: Consultamos a Gemini con el catálogo de productos
-      const { data: productos, error: prodError } = await supabase
-        .from("productos")
-        .select("nombre, formato_venta, precio, disponible")
-        .eq("disponible", true);
-
+      // MEJORA 5: Cache en memoria del catálogo (5 minutos) — evita consulta DB en cada mensaje
       let catalogoTexto = "No hay productos disponibles actualmente.";
-      if (!prodError && productos && productos.length > 0) {
-        catalogoTexto = productos
-          .map(p => `- ${p.nombre} (${p.formato_venta}): $${p.precio.toLocaleString("es-CL")}`)
-          .join("\n");
+      const ahoraCatalogo = Date.now();
+      if (catalogoCache.text && (ahoraCatalogo - catalogoCache.ts) < CATALOGO_CACHE_TTL) {
+        catalogoTexto = catalogoCache.text;
+        console.log("[whatsapp-incoming] 📦 Catálogo obtenido desde cache (sin consulta DB).");
+      } else {
+        const { data: productos, error: prodError } = await supabase
+          .from("productos")
+          .select("nombre, formato_venta, precio, disponible")
+          .eq("disponible", true);
+        if (!prodError && productos && productos.length > 0) {
+          catalogoTexto = productos
+            .map(p => `- ${p.nombre} (${p.formato_venta}): $${p.precio.toLocaleString("es-CL")}`)
+            .join("\n");
+          catalogoCache = { text: catalogoTexto, ts: ahoraCatalogo };
+          console.log(`[whatsapp-incoming] 📦 Catálogo cargado desde DB y guardado en cache (${productos.length} productos).`);
+        }
       }
 
       const geminiKey = process.env.GEMINI_API_KEY;
@@ -377,6 +433,21 @@ Reglas de Negocio Críticas (No negociables):
 ${infoVentanaPrompt}
 `;
 
+        // MEJORA 2: Contexto enriquecido del cliente en el prompt de Gemini
+        if (cliente) {
+          const { data: pedidosRecientes } = await supabase
+            .from("pedidos")
+            .select("id, created_at, estado")
+            .eq("cliente_id", cliente.id)
+            .order("created_at", { ascending: false })
+            .limit(5);
+          const totalPedidos = pedidosRecientes ? pedidosRecientes.length : 0;
+          const ultimoPedido = pedidosRecientes && pedidosRecientes.length > 0
+            ? new Date(pedidosRecientes[0].created_at).toLocaleDateString("es-CL", { day: "numeric", month: "short", year: "numeric" })
+            : null;
+          promptSistema += `\n\nCliente en esta conversación:\n- Nombre: ${cliente.nombre_contacto}\n- Tienda: ${cliente.nombre_tienda || "No especificada"}\n- Pedidos registrados (últimos 5 consultados): ${totalPedidos}${ultimoPedido ? `\n- Último pedido: ${ultimoPedido}` : ""}\nLlama al cliente por su nombre (${cliente.nombre_contacto}) de forma natural en la conversación.`;
+        }
+
         if (!cliente) {
           let registrationUrl = `https://lukeapp.me/registro?phone=${phoneClean}`;
           if (lidClean) {
@@ -393,19 +464,46 @@ ${infoVentanaPrompt}
 `;
         }
 
-        // 2. Consultar historial de chats (últimos 15 mensajes)
-        const { data: historial } = await supabase
+        // MEJORAS 3 y 4: Historial con filtro de 30 días y soporte de resúmenes de conversación
+        const treintaDiasAtras = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: historialCompleto } = await supabase
           .from("mensajes_chat")
-          .select("remitente, contenido")
+          .select("id, remitente, contenido, created_at")
           .eq("whatsapp", phoneClean)
+          .gte("created_at", treintaDiasAtras)
           .order("created_at", { ascending: false })
-          .limit(16); // Traemos 16 para excluir el mensaje actual que acabamos de insertar y dejar 15 de contexto
+          .limit(25);
 
-        const historialPrevio = historial ? historial.filter((_, idx) => idx > 0) : [];
+        // Separar resúmenes automáticos del historial normal
+        const resumenes = historialCompleto ? historialCompleto.filter(m => m.remitente === "resumen") : [];
+        const ultimoResumen = resumenes.length > 0 ? resumenes[0] : null;
+        const historialSinResumen = historialCompleto ? historialCompleto.filter(m => m.remitente !== "resumen") : [];
+
+        // Excluir el mensaje actual (idx 0) y tomar los últimos 15 como ventana de contexto
+        const historialPrevio = historialSinResumen.slice(1, 16);
         const historialCronologico = [...historialPrevio].reverse();
-        const historialTexto = historialCronologico.length > 0
-          ? historialCronologico.map(m => `${m.remitente === "usuario" ? "Cliente" : "Jaime"}: ${m.contenido}`).join("\n")
-          : "No hay historial de conversación reciente.";
+
+        // Construir texto de historial; si existe resumen previo, se incluye como contexto anterior
+        let historialTexto = "";
+        if (ultimoResumen) {
+          historialTexto += `[Contexto resumido de conversaciones anteriores]\n${ultimoResumen.contenido}\n\n`;
+        }
+        historialTexto += historialCronologico.length > 0
+          ? historialCronologico.map(m => {
+              const role = m.remitente === "usuario" ? "Cliente" : "Jaime";
+              return `${role}: ${m.contenido}`;
+            }).join("\n")
+          : "No hay mensajes recientes.";
+        if (!historialTexto.trim()) historialTexto = "No hay historial de conversación reciente.";
+
+        // MEJORA 4: Si hay >18 mensajes sin resumen reciente, generar resumen en background (fire & forget)
+        const totalMsgSinResumen = historialSinResumen.length;
+        const tieneResumenReciente = ultimoResumen &&
+          (Date.now() - new Date(ultimoResumen.created_at).getTime()) < 2 * 60 * 60 * 1000;
+        if (totalMsgSinResumen > 18 && !tieneResumenReciente) {
+          console.log(`[whatsapp-incoming] 📝 Generando resumen de conversación en background para ${phoneClean} (${totalMsgSinResumen} mensajes acumulados).`);
+          generarYGuardarResumen(supabase, phoneClean, historialTexto, geminiKey, modelName).catch(() => {});
+        }
 
         // 3. Validar si el remitente es un trabajador activo y su rol para habilitar herramientas
         const { data: trabajador } = await supabase
@@ -593,8 +691,10 @@ ${catalogoTexto}
 Historial de conversación reciente:
 ${historialTexto}
 
-Por favor, escucha la nota de voz anterior del usuario y respóndele de forma atenta, amigable y muy concisa siguiendo tus normas, el catálogo e historial. Si notas que se desvía del propósito repetidamente, utiliza la herramienta de silenciado.
-Respuesta del asistente:`
+INSTRUCCIÓN IMPORTANTE PARA ESTA NOTA DE VOZ (MEJORA 1):
+Tu respuesta DEBE seguir EXACTAMENTE este formato de dos secciones, sin excepción:
+TRANSCRIPCIÓN: [transcribe aquí literalmente lo que dijo el usuario en la nota de voz, sin añadir nada]
+RESPUESTA: [escribe aquí tu respuesta al usuario, siguiendo tus normas, el catálogo y el historial. Si el usuario se desvía repetidamente del propósito comercial, utiliza la herramienta de silenciado]`
           });
         } else {
           parts.push({
@@ -936,6 +1036,31 @@ Respuesta del asistente (si el usuario se desvía repetidamente de las consultas
               if (part.text) extractedText += part.text + " ";
             }
             responseText = extractedText.trim() || `¡Hola! Si deseas realizar un pedido, responde con la palabra "pedido".`;
+          }
+
+          // MEJORA 1: Extraer transcripción real del audio y actualizar mensajes_chat
+          if (tieneAudioEntrante && responseText) {
+            const matchTranscripcion = responseText.match(/^TRANSCRIPCI[\u00d3O]N:\s*(.+?)(?:\r?\n|$)/i);
+            const matchRespuesta = responseText.match(/RESPUESTA:\s*([\s\S]+)$/i);
+            if (matchTranscripcion && matchRespuesta) {
+              const transcripcionTexto = matchTranscripcion[1].trim();
+              const respuestaLimpia = matchRespuesta[1].trim();
+              // Actualizar el placeholder "[Nota de Voz]" con la transcripción real en mensajes_chat
+              if (mensajeChatId && transcripcionTexto) {
+                try {
+                  await supabase
+                    .from("mensajes_chat")
+                    .update({ contenido: `[Nota de Voz]: ${transcripcionTexto}` })
+                    .eq("id", mensajeChatId);
+                  console.log(`[whatsapp-incoming] 🎤 Transcripción guardada (ID ${mensajeChatId}): "${transcripcionTexto.substring(0, 80)}"`);
+                } catch (trErr) {
+                  console.error("[whatsapp-incoming] Error actualizando transcripción en DB:", trErr.message);
+                }
+              }
+              responseText = respuestaLimpia;
+            } else {
+              console.warn("[whatsapp-incoming] ⚠️ Gemini no siguió el formato TRANSCRIPCIÓN/RESPUESTA. Se usará el texto completo como respuesta.");
+            }
           }
 
           // --- PASO 2: Síntesis de voz (TTS) si la entrada fue audio ---
