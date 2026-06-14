@@ -120,14 +120,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // 4. Validación de seguridad: regla del furgón
-    if (totalNeto < MONTO_MINIMO) {
-      return res.status(400).json({
-        success: false,
-        message: `Pedido de $${totalNeto.toLocaleString("es-CL")} no alcanza el mínimo de $${MONTO_MINIMO.toLocaleString("es-CL")}.`,
-      });
-    }
-
     // 4.5. Validar ventana activa
     const nowISO = new Date().toISOString();
     const { data: ventanaActiva, error: ventanaErr } = await supabase
@@ -154,20 +146,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // 5. Cálculo del flete base para pedido inicial
-    const flete = FLETE_BASE + RECARGO_PESADO * bultosPesados;
-    const totalPagar = totalNeto + flete;
-
-    // 6. Info del cliente (best-effort)
-    let cliente = { id: finalClienteId, nombre_tienda: "Cliente Piloto" };
-    const { data: dbCliente } = await supabase
-      .from("clientes")
-      .select("*")
-      .eq("id", finalClienteId)
-      .single();
-
-    if (dbCliente) cliente = dbCliente;
-
     // 6b. Buscar si existe un pedido pendiente para la misma ventana
     const { data: pedidoExistente, error: checkErr } = await supabase
       .from("pedidos")
@@ -184,6 +162,29 @@ export default async function handler(req, res) {
         message: "Error al verificar pedido existente para esta ventana."
       });
     }
+
+    // 4. Validación de seguridad: regla del furgón (solo si es el pedido inicial)
+    const esPedidoInicial = !pedidoExistente;
+    if (esPedidoInicial && totalNeto < MONTO_MINIMO) {
+      return res.status(400).json({
+        success: false,
+        message: `Pedido de $${totalNeto.toLocaleString("es-CL")} no alcanza el mínimo de $${MONTO_MINIMO.toLocaleString("es-CL")}.`,
+      });
+    }
+
+    // 5. Cálculo del flete base para pedido inicial
+    const flete = FLETE_BASE + RECARGO_PESADO * bultosPesados;
+    const totalPagar = totalNeto + flete;
+
+    // 6. Info del cliente (best-effort)
+    let cliente = { id: finalClienteId, nombre_tienda: "Cliente Piloto" };
+    const { data: dbCliente } = await supabase
+      .from("clientes")
+      .select("*")
+      .eq("id", finalClienteId)
+      .single();
+
+    if (dbCliente) cliente = dbCliente;
 
     let pedidoId;
     let esFusion = false;

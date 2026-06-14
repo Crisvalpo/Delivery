@@ -257,7 +257,7 @@ export default function PedidoPage() {
     (sum, p) => sum + p.precio * (carrito[p.id] || 0),
     0
   );
-  const cumpleMinimo = total >= MONTO_MINIMO;
+  const cumpleMinimo = total >= MONTO_MINIMO || (pedidoPendiente !== null && total > 0);
   const faltante = MONTO_MINIMO - total;
   const itemsEnCarrito = Object.values(carrito).reduce((a, b) => a + b, 0);
 
