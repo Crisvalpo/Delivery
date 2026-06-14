@@ -685,6 +685,29 @@ ${infoVentanaPrompt}
             }
           },
           {
+            name: "guardar_datos_registro_temporal",
+            description: "Guarda temporalmente los datos básicos del cliente (nombre del dueño y de la tienda) en la base de datos para iniciar su pre-registro de forma amigable. Llama a esta función cuando un usuario no registrado se presente y dé sus datos, o cuando le preguntes por ellos para iniciar el registro.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                nombre_contacto: {
+                  type: "STRING",
+                  description: "El nombre completo o de pila del dueño o contacto del almacén (ej: 'Juan Pérez')"
+                },
+                nombre_tienda: {
+                  type: "STRING",
+                  description: "El nombre del negocio o almacén (ej: 'Almacén Don Tito')"
+                },
+                tipo_negocio: {
+                  type: "STRING",
+                  enum: ["Almacén", "Minimarket", "Botillería", "Fiambrería"],
+                  description: "El tipo de negocio o giro (opcional)."
+                }
+              },
+              required: ["nombre_contacto", "nombre_tienda"]
+            }
+          },
+          {
             name: "consultar_pedidos_cliente",
             description: "Recupera la lista de pedidos activos y recientes realizados por el usuario actual (almacenero) para informarle sobre su estado (Pendiente, Preparando, En Ruta, Entregado, Cancelado), el total a pagar, el flete, y el detalle de los productos. No requiere parámetros.",
             parameters: {
@@ -960,6 +983,57 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                   dbResult = errorBloqueo
                     ? `Error al pausar el bot: ${errorBloqueo.message}`
                     : `Éxito: El bot ha sido silenciado en Supabase por 24 horas (hasta ${veinticuatroHorasMas}) debido a solicitud de soporte humano. Debes informarle amablemente al usuario que has pausado tus respuestas automáticas y que un asesor de LukeDelivery se contactará con él a la brevedad.`;
+                }
+                else if (name === "guardar_datos_registro_temporal") {
+                  const { nombre_contacto, nombre_tienda, tipo_negocio } = args;
+                  
+                  let orConditions = `whatsapp.eq.${phoneClean},whatsapp.eq.${phoneWithPlus}`;
+                  if (lidClean) orConditions += `,whatsapp_lid.eq.${lidClean}`;
+                  
+                  const { data: existentes } = await supabase
+                    .from("clientes")
+                    .select("id, registro_completo")
+                    .or(orConditions);
+                  
+                  const clienteExistente = existentes && existentes.length > 0 ? existentes[0] : null;
+                  
+                  if (clienteExistente && clienteExistente.registro_completo) {
+                    dbResult = `Error: El cliente con este número ya se encuentra completamente registrado en el sistema.`;
+                  } else {
+                    const finalGiro = tipo_negocio || "Almacén";
+                    const dataObj = {
+                      nombre_contacto: nombre_contacto.trim(),
+                      nombre_tienda: nombre_tienda.trim(),
+                      whatsapp: phoneWithPlus,
+                      whatsapp_lid: lidClean || null,
+                      tipo_negocio: finalGiro,
+                      prioridad_territorial: "Media",
+                      registro_completo: false,
+                      notas_campo: "Pre-registro conversacional mediante Jaime (Bot)"
+                    };
+
+                    let error;
+                    if (clienteExistente) {
+                      const { error: err } = await supabase
+                        .from("clientes")
+                        .update(dataObj)
+                        .eq("id", clienteExistente.id);
+                      error = err;
+                    } else {
+                      const { error: err } = await supabase
+                        .from("clientes")
+                        .insert([dataObj]);
+                      error = err;
+                    }
+
+                    const registrationUrl = lidClean 
+                      ? `https://lukeapp.me/registro?phone=${phoneClean}&lid=${lidClean}`
+                      : `https://lukeapp.me/registro?phone=${phoneClean}`;
+
+                    dbResult = error
+                      ? `Error al guardar datos preliminares: ${error.message}`
+                      : `Éxito: Los datos de registro temporal fueron guardados en Supabase. Ahora debes invitar muy amablemente a ${nombre_contacto} a abrir el enlace para confirmar su geolocalización y activar su cuenta: ${registrationUrl}`;
+                  }
                 }
                 else if (name === "consultar_pedidos_cliente") {
                   if (!cliente) {

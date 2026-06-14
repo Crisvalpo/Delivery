@@ -36,6 +36,7 @@ export default function RegistroPage() {
   const [whatsappLid, setWhatsappLid] = useState("");
   const [isPhonePrefilled, setIsPhonePrefilled] = useState(false);
   const [checkingRegistered, setCheckingRegistered] = useState(true);
+  const [clienteIdExistente, setClienteIdExistente] = useState(null);
 
   // Cargar teléfono o LID del query string y validar registro previo
   useEffect(() => {
@@ -90,13 +91,30 @@ export default function RegistroPage() {
         if (orConditions) {
           const { data: clientes, error: clientError } = await supabase
             .from("clientes")
-            .select("id")
+            .select("id, registro_completo, nombre_contacto, nombre_tienda, tipo_negocio, whatsapp")
             .or(orConditions);
 
           if (!clientError && clientes && clientes.length > 0) {
-            console.log("[Registro] Cliente ya existe. Redirigiendo al catálogo...", clientes[0].id);
-            router.push(`/pedido?cliente_id=${clientes[0].id}`);
-            return;
+            const cliente = clientes[0];
+            if (cliente.registro_completo) {
+              console.log("[Registro] Cliente ya registrado por completo. Redirigiendo al catálogo...", cliente.id);
+              router.push(`/pedido?cliente_id=${cliente.id}`);
+              return;
+            } else {
+              console.log("[Registro] Encontrado pre-registro temporal de Jaime. Precargando datos...", cliente);
+              setClienteIdExistente(cliente.id);
+              if (cliente.nombre_contacto) setNombreContacto(cliente.nombre_contacto);
+              if (cliente.nombre_tienda) setNombreTienda(cliente.nombre_tienda);
+              if (cliente.tipo_negocio) setTipoNegocio(cliente.tipo_negocio);
+              if (cliente.whatsapp) {
+                let formatted = cliente.whatsapp;
+                if (!formatted.startsWith("+")) {
+                  formatted = "+" + formatted;
+                }
+                setWhatsapp(formatted);
+                setIsPhonePrefilled(true);
+              }
+            }
           }
         }
       } catch (err) {
@@ -158,6 +176,33 @@ export default function RegistroPage() {
     "Fiambrería",
   ];
 
+  // --- Geofencing local para deducir Sector ---
+  const detectarSector = (lat, lng) => {
+    if (lat === null || lng === null) return "Placilla Oriente";
+
+    // Fundo El Bato: Extremo sur de Placilla/Curauma
+    if (lat < -33.135) {
+      return "Fundo El Bato";
+    }
+
+    // Curauma: Oeste del eje de la Ruta 68 (-71.560)
+    if (lng < -71.560) {
+      // Tranque de la Luz actúa como división aproximada en latitud -33.118
+      if (lat > -33.118) {
+        return "Curauma Norte";
+      } else {
+        return "Curauma Sur";
+      }
+    }
+
+    // Placilla: Este de la Ruta 68
+    if (lat > -33.100) {
+      return "Placilla Oriente";
+    } else {
+      return "Placilla Poniente";
+    }
+  };
+
   // --- Captura de GPS (con fallback para iPhone) ---
   const obtenerGPS = () => {
     if (!("geolocation" in navigator)) {
@@ -166,20 +211,34 @@ export default function RegistroPage() {
       return;
     }
 
+    // Advertir en iOS si no estamos en un contexto seguro (HTTPS)
+    if (typeof window !== "undefined" && window.location.protocol !== "https:" && window.location.hostname !== "localhost") {
+      setGpsStatus("error");
+      setGpsErrorMsg("La geolocalización requiere una conexión segura (HTTPS) en dispositivos iPhone/Safari. Por favor accede vía https:// o desde tu red local segura.");
+      return;
+    }
+
     setGpsStatus("loading");
     setGpsErrorMsg(null);
     setError(null);
 
     const onSuccess = (position) => {
-      setLatitud(position.coords.latitude);
-      setLongitud(position.coords.longitude);
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      setLatitud(lat);
+      setLongitud(lng);
       setGpsStatus("success");
       setGpsErrorMsg(null);
+
+      // Autodetectar y establecer el sector automáticamente
+      const sectorDetectado = detectarSector(lat, lng);
+      setSector(sectorDetectado);
+      console.log(`[GPS] Ubicación exitosa. Sector autodetectado: ${sectorDetectado} (Lat: ${lat}, Lng: ${lng})`);
     };
 
     const onError = (err) => {
       console.warn("[LukeDelivery GPS] Error high accuracy:", err.code, err.message);
-      // En iPhone, intentar con baja precisión como fallback
+      // En iPhone, intentar con baja precisión como fallback y un timeout adecuado
       navigator.geolocation.getCurrentPosition(
         onSuccess,
         (err2) => {
@@ -188,7 +247,7 @@ export default function RegistroPage() {
           if (err2.code === 1) {
             // PERMISSION_DENIED
             setGpsErrorMsg(
-              "Acceso a ubicación denegado. En iPhone: ve a Configuración → Safari → Ubicación → Permitir. Luego recarga esta página."
+              "Acceso a ubicación denegado. En iPhone (Safari): toca el botón 'aA' o el candado a la izquierda de la barra de direcciones de Safari, selecciona 'Ajustes del sitio web', cambia Ubicación a 'Permitir' y recarga la página. También puedes ir a Ajustes de iOS → Privacidad y seguridad → Localización → Safari y seleccionar 'Al usar la app'."
             );
           } else if (err2.code === 2) {
             // POSITION_UNAVAILABLE
@@ -204,11 +263,11 @@ export default function RegistroPage() {
       );
     };
 
-    // Primer intento: alta precisión (GPS real)
+    // Primer intento: alta precisión (GPS real) con un timeout de 25 segundos para iPhone en frío
     navigator.geolocation.getCurrentPosition(
       onSuccess,
       onError,
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
     );
   };
 
@@ -261,30 +320,47 @@ export default function RegistroPage() {
     }
 
     try {
-      const { data, error: insertErr } = await supabase
-        .from("clientes")
-        .insert({
-          nombre_tienda: nombreTienda.trim(),
-          nombre_contacto: nombreContacto.trim(),
-          whatsapp: formattedWhatsapp,
-          whatsapp_lid: whatsappLid || null,
-          sector: sector,
-          notas_campo: "Cliente auto-registrado en terreno (QR Volante)",
-          latitud: latitud,
-          longitud: longitud,
-          prioridad_territorial: "Media",
-          tipo_negocio: tipoNegocio,
-        })
-        .select("id")
-        .single();
+      let finalClientId;
+      const clientPayload = {
+        nombre_tienda: nombreTienda.trim(),
+        nombre_contacto: nombreContacto.trim(),
+        whatsapp: formattedWhatsapp,
+        whatsapp_lid: whatsappLid || null,
+        sector: sector,
+        notas_campo: clienteIdExistente
+          ? "Pre-registro completado vía web (Jaime Bot)"
+          : "Cliente auto-registrado en terreno (QR Volante)",
+        latitud: latitud,
+        longitud: longitud,
+        prioridad_territorial: "Media",
+        tipo_negocio: tipoNegocio,
+        registro_completo: true,
+      };
 
-      if (insertErr) throw insertErr;
+      if (clienteIdExistente) {
+        const { error: updateErr } = await supabase
+          .from("clientes")
+          .update(clientPayload)
+          .eq("id", clienteIdExistente);
+
+        if (updateErr) throw updateErr;
+        finalClientId = clienteIdExistente;
+      } else {
+        const { data, error: insertErr } = await supabase
+          .from("clientes")
+          .insert(clientPayload)
+          .select("id")
+          .single();
+
+        if (insertErr) throw insertErr;
+        finalClientId = data.id;
+      }
 
       setSuccess(true);
       
-      // Redirigir al catálogo después de 2 segundos pasándole su nuevo cliente_id
+      // Redirigir al catálogo después de 2 segundos pasándole su cliente_id
       setTimeout(() => {
-        router.push(`/pedido?cliente_id=${data.id}`);
+        router.push(`/pedido?cliente_id=${finalClientId}`);
       }, 2000);
 
     } catch (err) {
