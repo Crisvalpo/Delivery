@@ -610,6 +610,7 @@ Reglas de Negocio Críticas (No negociables):
 4. Información del estado de Ventanas de Pedidos y despachos:
 ${infoVentanaPrompt}
 5. Al crear o actualizar un producto, debes clasificarlo de forma precisa y obligatoria en la categoría comercial más adecuada según el producto, usando estrictamente una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería' o 'Bebidas'.
+6. Antes de llamar a "crear_producto" para registrar un artículo, revisa siempre la lista de productos del catálogo actual que tienes en el contexto. Si ya existe un producto con el mismo nombre y formato, NO lo vuelvas a crear; en su lugar, utiliza la herramienta "actualizar_detalles_producto" para modificar sus precios o detalles.
 `;
 
         // MEJORA 2: Contexto enriquecido según el perfil del usuario en el prompt de Gemini
@@ -900,6 +901,10 @@ ${urlImagenPublicaTemp}
                         type: "STRING",
                         enum: ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"],
                         description: "La categoría comercial del producto. Debe ser estrictamente una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería', 'Bebidas'. Es requerida."
+                      },
+                      sku: {
+                        type: "STRING",
+                        description: "El SKU o código único identificador del producto (opcional). Si no se provee, el sistema lo generará automáticamente."
                       },
                       url_imagen_retail: {
                         type: "STRING",
@@ -1299,7 +1304,7 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                   }
                 } 
                 else if (name === "crear_producto") {
-                  const { nombre, formato_venta, precio, precio_costo, tipo_bulto, url_imagen_retail, categoria } = args;
+                  const { nombre, formato_venta, precio, precio_costo, tipo_bulto, url_imagen_retail, categoria, sku } = args;
                   
                   let precioVentaFinal = precio;
                   let margenAplicado = null;
@@ -1316,24 +1321,101 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                     : "https://cdn.pesco.cl/wp-content/uploads/2021/03/producto_sin_imagen.png";
 
                   const finalBulto = tipo_bulto || "Estándar";
+                  const finalSku = sku && sku.trim() 
+                    ? sku.trim() 
+                    : "LD-" + Math.random().toString(36).substring(2, 7).toUpperCase();
 
-                  const { error } = await supabase
-                    .from("productos")
-                    .insert([{
-                      nombre,
-                      formato_venta,
+                  // Búsqueda inteligente de duplicados para realizar Upsert
+                  const cleanNombre = nombre.trim();
+                  const cleanFormato = formato_venta.trim();
+                  const cleanSku = sku && sku.trim() ? sku.trim() : null;
+
+                  let productoExistente = null;
+
+                  // 1. Buscar por SKU si se proporciona
+                  if (cleanSku) {
+                    const { data: porSku, error: errSku } = await supabase
+                      .from("productos")
+                      .select("*")
+                      .eq("sku", cleanSku)
+                      .maybeSingle();
+
+                    if (errSku) {
+                      console.error("[whatsapp-incoming] Error buscando por SKU:", errSku.message);
+                    }
+                    if (porSku) {
+                      productoExistente = porSku;
+                    }
+                  }
+
+                  // 2. Si no se encontró por SKU, buscar por Nombre y Formato (activo = true primero)
+                  if (!productoExistente) {
+                    const { data: existenciasNombre, error: errNombre } = await supabase
+                      .from("productos")
+                      .select("*")
+                      .ilike("nombre", cleanNombre)
+                      .ilike("formato_venta", cleanFormato)
+                      .order("activo", { ascending: false }) // primero activos
+                      .limit(1)
+                      .maybeSingle();
+
+                    if (errNombre) {
+                      console.error("[whatsapp-incoming] Error buscando por Nombre/Formato:", errNombre.message);
+                    }
+                    if (existenciasNombre) {
+                      productoExistente = existenciasNombre;
+                    }
+                  }
+
+                  if (productoExistente) {
+                    // Actualizar el producto existente
+                    const updates = {
+                      nombre: cleanNombre, // Actualizar nombre para homologar capitalización
+                      formato_venta: cleanFormato, // Actualizar formato para homologar
                       precio: precioVentaFinal,
                       precio_costo,
-                      categoria: categoria || "Abarrotes",
                       tipo_bulto: finalBulto,
-                      url_imagen_retail: finalImgUrl,
                       disponible: true,
-                      activo: true
-                    }]);
+                      activo: true // Reactivar si estaba inactivo
+                    };
+                    if (categoria) updates.categoria = categoria;
+                    if (cleanSku) updates.sku = cleanSku;
+                    if (url_imagen_retail && url_imagen_retail.trim()) updates.url_imagen_retail = finalImgUrl;
 
-                  dbResult = error
-                    ? `Error al crear: ${error.message}`
-                    : `Éxito: El producto "${nombre}" (${formato_venta}) ha sido agregado al catálogo con un precio de costo de $${precio_costo.toLocaleString("es-CL")} y precio de venta de $${precioVentaFinal.toLocaleString("es-CL")}${margenAplicado !== null ? ` (calculado automáticamente agregando un ${margenAplicado}% de margen de ganancia configurado en la app)` : ""}. ${!url_imagen_retail ? "Se ha asignado una imagen por defecto, recuerda que el usuario puede proporcionar una URL para actualizarla." : ""}`;
+                    const { error: updateError } = await supabase
+                      .from("productos")
+                      .update(updates)
+                      .eq("id", productoExistente.id);
+
+                    if (updateError) {
+                      dbResult = `Error al actualizar producto existente: ${updateError.message}`;
+                    } else {
+                      dbResult = `Éxito: El producto "${cleanNombre}" (${cleanFormato}) ya existía en el catálogo (SKU: ${productoExistente.sku || cleanSku || "N/A"}) y fue actualizado automáticamente. (Costo: $${precio_costo.toLocaleString("es-CL")}, Venta: $${precioVentaFinal.toLocaleString("es-CL")}${margenAplicado !== null ? ` con margen del ${margenAplicado}%` : ""}).`;
+                    }
+                  } else {
+                    // No existe en la base de datos, procedemos a insertar
+                    const skuParaInsertar = cleanSku || ("LD-" + Math.random().toString(36).substring(2, 7).toUpperCase());
+                    const { error: insertError } = await supabase
+                      .from("productos")
+                      .insert([{
+                        nombre: cleanNombre,
+                        formato_venta: cleanFormato,
+                        precio: precioVentaFinal,
+                        precio_costo,
+                        sku: skuParaInsertar,
+                        categoria: categoria || "Abarrotes",
+                        tipo_bulto: finalBulto,
+                        url_imagen_retail: finalImgUrl,
+                        disponible: true,
+                        activo: true
+                      }]);
+
+                    if (insertError) {
+                      dbResult = `Error al crear producto: ${insertError.message}`;
+                    } else {
+                      dbResult = `Éxito: El producto "${cleanNombre}" (${cleanFormato}) ha sido creado en el catálogo con SKU: ${skuParaInsertar}. Costo: $${precio_costo.toLocaleString("es-CL")}, Venta: $${precioVentaFinal.toLocaleString("es-CL")}${margenAplicado !== null ? ` (con margen del ${margenAplicado}% calculado)` : ""}.`;
+                    }
+                  }
                 }
                 else if (name === "cambiar_disponibilidad_producto") {
                   const { nombre_producto, disponible } = args;

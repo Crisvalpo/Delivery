@@ -39,6 +39,14 @@ export default function PedidoPage() {
   const [ventanaActiva, setVentanaActiva] = useState(null);
   const [pedidoPendiente, setPedidoPendiente] = useState(null);
   const [tokenUsado, setTokenUsado] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("Todas");
+  const [limiteProductos, setLimiteProductos] = useState(20);
+
+  // Reiniciar el límite de renderizado al filtrar
+  useEffect(() => {
+    setLimiteProductos(20);
+  }, [busqueda, categoriaSeleccionada]);
 
   const supabase = createClient();
 
@@ -95,10 +103,46 @@ export default function PedidoPage() {
 
   const tipo = clienteInfo?.tipo_negocio || "Almacén";
   const catsPermitidas = getCatsPermitidas(tipo);
-  const productosFiltrados = productos.filter((p) => {
+  
+  // 1. Filtrar productos compatibles con el tipo de negocio del cliente
+  const productosCompatibles = productos.filter((p) => {
     const pCat = cleanCat(p.categoria || "Abarrotes");
     return catsPermitidas.some(c => cleanCat(c) === pCat);
   });
+
+  // 2. Filtrar por buscador y categoría seleccionada
+  const productosFiltrados = productosCompatibles.filter((p) => {
+    // Filtro de categoría activa
+    if (categoriaSeleccionada !== "Todas") {
+      if (cleanCat(p.categoria || "Abarrotes") !== cleanCat(categoriaSeleccionada)) {
+        return false;
+      }
+    }
+
+    // Filtro de búsqueda por nombre o SKU
+    if (busqueda.trim() !== "") {
+      const matchNombre = p.nombre.toLowerCase().includes(busqueda.toLowerCase());
+      const matchSku = p.sku && p.sku.toLowerCase().includes(busqueda.toLowerCase());
+      if (!matchNombre && !matchSku) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  // 3. Ordenar por categoría y luego alfabéticamente por nombre
+  const productosOrdenados = [...productosFiltrados].sort((a, b) => {
+    const catA = a.categoria || "Abarrotes";
+    const catB = b.categoria || "Abarrotes";
+    if (catA !== catB) {
+      return catA.localeCompare(catB, "es");
+    }
+    return a.nombre.localeCompare(b.nombre, "es");
+  });
+
+  // 4. Limitar el renderizado a la cantidad definida por limiteProductos
+  const productosVisibles = productosOrdenados.slice(0, limiteProductos);
 
   // --- Carga de productos e inicialización de sesión ---
   useEffect(() => {
@@ -496,125 +540,220 @@ export default function PedidoPage() {
             </a>
           </div>
         ) : !tokenError && ventanaActiva && (
-          /* ===== PRODUCT LIST AGROUPED BY CATEGORY ===== */
-          <div className="space-y-8 animate-fade-in">
-            {catsPermitidas.map((catName) => {
-              const prodsDeCat = productosFiltrados.filter(
-                (p) => cleanCat(p.categoria || "Abarrotes") === cleanCat(catName)
-              );
+          <div className="space-y-6 animate-fade-in">
+            {/* ===== BUSCADOR Y FILTROS MÓVILES ===== */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-4">
+              {/* Buscador */}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre o SKU..."
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  className="w-full pl-4 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent text-slate-800 placeholder-slate-400 font-medium transition-all"
+                />
+                {busqueda && (
+                  <button
+                    onClick={() => setBusqueda("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-450 hover:text-slate-700 bg-transparent border-0 font-bold text-xs cursor-pointer focus:outline-none"
+                  >
+                    Borrar
+                  </button>
+                )}
+              </div>
 
-              if (prodsDeCat.length === 0) return null;
+              {/* Categorías Deslizables */}
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">
+                  Categorías comerciales
+                </span>
+                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none snap-x -mx-1 px-1">
+                  {/* Botón Todas */}
+                  <button
+                    onClick={() => setCategoriaSeleccionada("Todas")}
+                    className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap snap-align-start transition-all cursor-pointer border ${
+                      categoriaSeleccionada === "Todas"
+                        ? "bg-brand border-brand text-white shadow-sm shadow-brand/25"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    Todas ({productosCompatibles.length})
+                  </button>
 
-              return (
-                <div key={catName} className="mb-6">
-                  {/* Category Header */}
-                  <h2 className="text-xl font-extrabold text-gray-800 mb-4 border-b-2 border-gray-200 pb-2 flex items-center justify-between">
-                    <span>{catName}</span>
-                    <span className="text-xs bg-brand/10 text-brand px-2.5 py-0.5 rounded-full font-bold">
-                      {prodsDeCat.length} {prodsDeCat.length === 1 ? 'producto' : 'productos'}
-                    </span>
-                  </h2>
+                  {/* Botones de categorías permitidas */}
+                  {catsPermitidas.map((catName) => {
+                    const totalCat = productosCompatibles.filter(
+                      (p) => cleanCat(p.categoria || "Abarrotes") === cleanCat(catName)
+                    ).length;
 
-                  {/* Category Products */}
-                  <div className="space-y-4">
-                    {prodsDeCat.map((p) => {
-                      const cant = carrito[p.id] || 0;
-                      const isActive = cant > 0;
+                    if (totalCat === 0) return null;
 
-                      return (
-                        <div
-                          key={p.id}
-                          className={`bg-white border-2 rounded-xl p-3.5 mb-4 flex items-start gap-3.5 transition-all ${
-                            isActive
-                              ? "border-brand/60 shadow-lg shadow-brand/5"
-                              : "border-gray-200"
-                          }`}
-                        >
-                          {/* Imagen */}
-                          <div className="relative w-[72px] h-[72px] rounded-xl overflow-hidden shrink-0 bg-gray-50 border border-gray-100 flex items-center justify-center">
-                            {p.url_imagen_retail ? (
-                              <img
-                                src={p.url_imagen_retail}
-                                alt={p.nombre}
-                                className="h-full w-full object-cover"
-                                loading="lazy"
-                                onError={(e) => {
-                                  e.target.onerror = null;
-                                  e.target.style.display = "none";
-                                }}
-                              />
-                            ) : (
-                              <div className="h-full w-full flex items-center justify-center text-brand font-black text-2xl">
-                                {p.nombre.charAt(0)}
-                              </div>
-                            )}
-                            {p.tipo_bulto === "Pesado" && (
-                              <div className="absolute top-0 left-0 bg-accent text-black text-[8px] font-black px-1.5 py-0.5 rounded-br-lg uppercase">
-                                PESADO
-                              </div>
-                            )}
-                          </div>
+                    const isSelected = categoriaSeleccionada === catName;
 
-                          {/* Info y Controles */}
-                          <div className="flex-1 min-w-0 flex flex-col justify-between self-stretch">
-                            <div>
-                              <h3 className="text-[15px] font-bold text-gray-800 leading-snug break-words">
-                                {p.nombre}
-                              </h3>
-                              <div className="mt-0.5">
-                                <span className="inline-block bg-gray-50 text-gray-500 text-[10px] font-semibold px-2 py-0.5 rounded border border-gray-200 leading-none">
-                                  {p.formato_venta}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Fila Inferior: Precio e Incrementador */}
-                            <div className="flex items-center justify-between gap-2 mt-2">
-                              <div className="flex flex-col">
-                                <span className="text-[17px] font-black text-gray-900 leading-none">
-                                  {fmt(p.precio)}
-                                </span>
-                                <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-1">
-                                  costo real
-                                </span>
-                              </div>
-
-                              {/* Selector compacto [-] N [+] */}
-                              <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200 overflow-hidden h-9 shrink-0">
-                                <button
-                                  onClick={() => setCantidad(p.id, -1)}
-                                  disabled={cant === 0}
-                                  className={`h-9 w-9 flex items-center justify-center transition-all cursor-pointer font-bold ${
-                                    cant === 0
-                                      ? "text-gray-300 bg-gray-100/50 cursor-not-allowed"
-                                      : "text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90"
-                                  }`}
-                                >
-                                  <Minus className="h-4 w-4 stroke-[3]" />
-                                </button>
-                                <span
-                                  className={`w-8 text-center text-sm font-bold select-none ${
-                                    isActive ? "text-brand" : "text-gray-700"
-                                  }`}
-                                >
-                                  {cant}
-                                </span>
-                                <button
-                                  onClick={() => setCantidad(p.id, 1)}
-                                  className="h-9 w-9 flex items-center justify-center text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90 font-bold transition-all cursor-pointer"
-                                >
-                                  <Plus className="h-4 w-4 stroke-[3]" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                    return (
+                      <button
+                        key={catName}
+                        onClick={() => setCategoriaSeleccionada(catName)}
+                        className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap snap-align-start transition-all cursor-pointer border ${
+                          isSelected
+                            ? "bg-brand border-brand text-white shadow-sm shadow-brand/25"
+                            : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        {catName} ({totalCat})
+                      </button>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </div>
+            </div>
+
+            {/* ===== LISTA DE PRODUCTOS ===== */}
+            <div className="space-y-8">
+              {productosVisibles.length === 0 ? (
+                <div className="bg-white border border-slate-200 rounded-2xl py-12 text-center shadow-sm">
+                  <p className="text-sm font-medium text-slate-500">
+                    No se encontraron productos coincidentes.
+                  </p>
+                </div>
+              ) : (
+                catsPermitidas.map((catName) => {
+                  // Filtrar los productos visibles que pertenecen a esta categoría
+                  const prodsDeCat = productosVisibles.filter(
+                    (p) => cleanCat(p.categoria || "Abarrotes") === cleanCat(catName)
+                  );
+
+                  if (prodsDeCat.length === 0) return null;
+
+                  return (
+                    <div key={catName} className="mb-6">
+                      {/* Category Header */}
+                      <h2 className="text-lg font-extrabold text-gray-800 mb-4 border-b-2 border-gray-200 pb-2 flex items-center justify-between">
+                        <span>{catName}</span>
+                        <span className="text-xs bg-brand/10 text-brand px-2.5 py-0.5 rounded-full font-bold">
+                          {productosFiltrados.filter(p => cleanCat(p.categoria || "Abarrotes") === cleanCat(catName)).length} totales
+                        </span>
+                      </h2>
+
+                      {/* Category Products */}
+                      <div className="space-y-4">
+                        {prodsDeCat.map((p) => {
+                          const cant = carrito[p.id] || 0;
+                          const isActive = cant > 0;
+
+                          return (
+                            <div
+                              key={p.id}
+                              className={`bg-white border-2 rounded-xl p-3.5 mb-4 flex items-start gap-3.5 transition-all ${
+                                isActive
+                                  ? "border-brand/60 shadow-lg shadow-brand/5"
+                                  : "border-gray-200"
+                              }`}
+                            >
+                              {/* Imagen */}
+                              <div className="relative w-[72px] h-[72px] rounded-xl overflow-hidden shrink-0 bg-gray-50 border border-gray-100 flex items-center justify-center">
+                                {p.url_imagen_retail ? (
+                                  <img
+                                    src={p.url_imagen_retail}
+                                    alt={p.nombre}
+                                    className="h-full w-full object-cover"
+                                    loading="lazy"
+                                    onError={(e) => {
+                                      e.target.onerror = null;
+                                      e.target.style.display = "none";
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="h-full w-full flex items-center justify-center text-brand font-black text-2xl">
+                                    {p.nombre.charAt(0)}
+                                  </div>
+                                )}
+                                {p.tipo_bulto === "Pesado" && (
+                                  <div className="absolute top-0 left-0 bg-accent text-black text-[8px] font-black px-1.5 py-0.5 rounded-br-lg uppercase">
+                                    PESADO
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Info y Controles */}
+                              <div className="flex-1 min-w-0 flex flex-col justify-between self-stretch">
+                                <div>
+                                  <h3 className="text-[15px] font-bold text-gray-800 leading-snug break-words flex items-start gap-1.5 flex-wrap">
+                                    <span>{p.nombre}</span>
+                                    {p.sku && (
+                                      <span className="bg-slate-100 text-slate-500 text-[8px] font-bold px-1.5 py-0.5 rounded border border-slate-200 uppercase leading-none">
+                                        SKU: {p.sku}
+                                      </span>
+                                    )}
+                                  </h3>
+                                  <div className="mt-1">
+                                    <span className="inline-block bg-gray-50 text-gray-500 text-[10px] font-semibold px-2 py-0.5 rounded border border-gray-200 leading-none">
+                                      {p.formato_venta}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Fila Inferior: Precio e Incrementador */}
+                                <div className="flex items-center justify-between gap-2 mt-2">
+                                  <div className="flex flex-col">
+                                    <span className="text-[17px] font-black text-gray-900 leading-none">
+                                      {fmt(p.precio)}
+                                    </span>
+                                    <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-1">
+                                      costo real
+                                    </span>
+                                  </div>
+
+                                  {/* Selector compacto [-] N [+] */}
+                                  <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200 overflow-hidden h-9 shrink-0">
+                                    <button
+                                      onClick={() => setCantidad(p.id, -1)}
+                                      disabled={cant === 0}
+                                      className={`h-9 w-9 flex items-center justify-center transition-all cursor-pointer font-bold ${
+                                        cant === 0
+                                          ? "text-gray-300 bg-gray-100/50 cursor-not-allowed"
+                                          : "text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90"
+                                      }`}
+                                    >
+                                      <Minus className="h-4 w-4 stroke-[3]" />
+                                    </button>
+                                    <span
+                                      className={`w-8 text-center text-sm font-bold select-none ${
+                                        isActive ? "text-brand" : "text-gray-700"
+                                      }`}
+                                    >
+                                      {cant}
+                                    </span>
+                                    <button
+                                      onClick={() => setCantidad(p.id, 1)}
+                                      className="h-9 w-9 flex items-center justify-center text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90 font-bold transition-all cursor-pointer"
+                                    >
+                                      <Plus className="h-4 w-4 stroke-[3]" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* ===== BOTÓN CARGAR MÁS ===== */}
+            {productosFiltrados.length > limiteProductos && (
+              <div className="flex justify-center pt-2 pb-6">
+                <button
+                  onClick={() => setLimiteProductos(prev => prev + 20)}
+                  className="px-6 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-600 hover:text-slate-800 hover:border-slate-300 shadow-sm active:scale-95 transition-all cursor-pointer"
+                >
+                  Cargar más productos ({productosFiltrados.length - limiteProductos} restantes)
+                </button>
+              </div>
+            )}
           </div>
         )}
       </main>

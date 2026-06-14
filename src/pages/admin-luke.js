@@ -24,6 +24,7 @@ import {
   AlertCircle,
   ShoppingCart,
   Truck,
+  Menu,
 } from "lucide-react";
 import AdminAuthGuard from "@/components/AdminAuthGuard";
 
@@ -69,6 +70,14 @@ export default function AdminLukePage() {
   const [showConsolidateModal, setShowConsolidateModal] = useState(false);
   const [consolidadoItems, setConsolidadoItems] = useState([]);
   const [loadingConsolidado, setLoadingConsolidado] = useState(false);
+  
+  // Filtros, buscador y paginación para el catálogo
+  const [filtroNombreSku, setFiltroNombreSku] = useState("");
+  const [filtroCategoria, setFiltroCategoria] = useState("Todas");
+  const [filtroBulto, setFiltroBulto] = useState("Todos");
+  const [paginaActual, setPaginaActual] = useState(1);
+  const itemsPorPagina = 10;
+
   const [productForm, setProductForm] = useState({
     nombre: "",
     formato_venta: "",
@@ -77,12 +86,15 @@ export default function AdminLukePage() {
     tipo_bulto: "Estándar",
     url_imagen_retail: "",
     disponible: true,
-    categoria: "Abarrotes"
+    categoria: "Abarrotes",
+    sku: ""
   });
   const [clickCoords, setClickCoords] = useState(null);
   const [saving, setSaving] = useState(false);
   const [modoEdicion, setModoEdicion] = useState(false);
   const [modoCrear, setModoCrear] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef(null);
   const [sidebarCliente, setSidebarCliente] = useState(null);
   const [actualizandoPedidoId, setActualizandoPedidoId] = useState(null);
   const [form, setForm] = useState({
@@ -123,6 +135,17 @@ export default function AdminLukePage() {
   useEffect(() => {
     modoCrearRef.current = modoCrear;
   }, [modoCrear]);
+
+  // Cerrar el menú desplegable al hacer clic fuera de él
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // --- Cargar clientes, pedidos y productos ---
   const fetchClientes = useCallback(async () => {
@@ -197,6 +220,27 @@ export default function AdminLukePage() {
     fetchClientes();
     fetchVentanas();
   }, [fetchClientes, fetchVentanas]);
+
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [filtroNombreSku, filtroCategoria, filtroBulto]);
+
+  const productosFiltrados = productos.filter((prod) => {
+    const cumpleBusqueda = filtroNombreSku.trim() === "" || 
+      cleanText(prod.nombre).toLowerCase().includes(filtroNombreSku.toLowerCase()) || 
+      (prod.sku && prod.sku.toLowerCase().includes(filtroNombreSku.toLowerCase()));
+    
+    const cumpleCategoria = filtroCategoria === "Todas" || prod.categoria === filtroCategoria;
+    
+    const cumpleBulto = filtroBulto === "Todos" || prod.tipo_bulto === filtroBulto;
+    
+    return cumpleBusqueda && cumpleCategoria && cumpleBulto;
+  });
+
+  const totalPaginas = Math.ceil(productosFiltrados.length / itemsPorPagina) || 1;
+  const indexUltimoItem = paginaActual * itemsPorPagina;
+  const indexPrimerItem = indexUltimoItem - itemsPorPagina;
+  const productosPaginados = productosFiltrados.slice(indexPrimerItem, indexUltimoItem);
 
   const fetchConsolidado = useCallback(async () => {
     setLoadingConsolidado(true);
@@ -740,7 +784,8 @@ export default function AdminLukePage() {
         tipo_bulto: producto.tipo_bulto,
         url_imagen_retail: producto.url_imagen_retail || "",
         disponible: producto.disponible,
-        categoria: producto.categoria || "Abarrotes"
+        categoria: producto.categoria || "Abarrotes",
+        sku: producto.sku || ""
       });
     } else {
       setEditingProducto(null);
@@ -752,7 +797,8 @@ export default function AdminLukePage() {
         tipo_bulto: "Estándar",
         url_imagen_retail: "",
         disponible: true,
-        categoria: "Abarrotes"
+        categoria: "Abarrotes",
+        sku: ""
       });
     }
     setShowProductForm(true);
@@ -775,19 +821,65 @@ export default function AdminLukePage() {
         tipo_bulto: productForm.tipo_bulto,
         url_imagen_retail: productForm.url_imagen_retail.trim() || null,
         disponible: productForm.disponible,
-        categoria: productForm.categoria
+        categoria: productForm.categoria,
+        sku: productForm.sku.trim() || "LD-" + Math.random().toString(36).substring(2, 7).toUpperCase()
       };
 
-      if (editingProducto) {
+      let idParaActualizar = null;
+      const skuIngresado = productForm.sku.trim();
+      const nombreIngresado = productForm.nombre.trim();
+      const formatoIngresado = productForm.formato_venta.trim();
+
+      if (!editingProducto) {
+        // 1. Buscar por SKU
+        if (skuIngresado) {
+          const { data: porSku, error: errSku } = await supabase
+            .from("productos")
+            .select("id")
+            .eq("sku", skuIngresado)
+            .maybeSingle();
+
+          if (porSku) {
+            idParaActualizar = porSku.id;
+          }
+        }
+
+        // 2. Si no se encontró por SKU, buscar por nombre y formato (activo = true primero)
+        if (!idParaActualizar) {
+          const { data: porNombre, error: errNombre } = await supabase
+            .from("productos")
+            .select("id")
+            .ilike("nombre", nombreIngresado)
+            .ilike("formato_venta", formatoIngresado)
+            .order("activo", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (porNombre) {
+            idParaActualizar = porNombre.id;
+          }
+        }
+      }
+
+      if (editingProducto || idParaActualizar) {
         // Actualizar
+        const targetId = editingProducto ? editingProducto.id : idParaActualizar;
         const { error } = await supabase
           .from("productos")
-          .update(payload)
-          .eq("id", editingProducto.id);
+          .update({
+            ...payload,
+            activo: true, // Reactivar si estaba inactivo
+            disponible: true
+          })
+          .eq("id", targetId);
 
         if (error) throw error;
+
+        if (idParaActualizar) {
+          alert(`El producto "${nombreIngresado}" (${formatoIngresado}) o SKU "${skuIngresado || ''}" ya existía en el catálogo. Se actualizó el producto existente en lugar de crear uno nuevo.`);
+        }
       } else {
-        // Insertar
+        // Insertar nuevo
         const { error } = await supabase
           .from("productos")
           .insert(payload);
@@ -867,9 +959,16 @@ export default function AdminLukePage() {
               Placilla & Curauma
             </span>
           </div>
-        </div>
+        </div>        <div className="flex items-center gap-2 relative">
+          {/* Botón Refrescar (Siempre Visible) */}
+          <button
+            onClick={() => { setLoading(true); fetchClientes(); }}
+            className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-surface-2 transition-colors cursor-pointer"
+            title="Refrescar"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
 
-        <div className="flex items-center gap-2">
           {/* Botón Modo Crear Nuevo Almacén */}
           <button
             onClick={() => {
@@ -881,131 +980,152 @@ export default function AdminLukePage() {
                 ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-lg shadow-emerald-500/10 animate-pulse"
                 : "bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
             }`}
-            title={modoCrear ? "Haz clic en el mapa para posicionar el nuevo almacén" : "Activar modo: crear nuevo almacén haciendo clic en el mapa"}
+            title={modoCrear ? "Haz clic en el mapa para posicionar el nuevo almacén" : "Crear nuevo almacén haciendo clic en el mapa"}
           >
             <Plus className="h-3.5 w-3.5" />
-            <span>{modoCrear ? "Clic en el mapa..." : "Nuevo Almacén"}</span>
+            <span className="hidden md:inline">{modoCrear ? "Clic en el mapa..." : "Nuevo Almacén"}</span>
+            <span className="md:hidden">{modoCrear ? "Listo..." : "Nuevo"}</span>
             {modoCrear && <X className="h-3 w-3 ml-0.5 opacity-70" />}
           </button>
 
-          {/* Switch de Modo Edición de Ubicación */}
-          <div className="flex items-center gap-2.5 bg-bg-surface-2 border border-border px-3 py-1.5 rounded-xl">
-            <span className="text-[11px] font-bold text-text-secondary select-none">
-              Ajustar Ubicación
-            </span>
+          {/* Menú Hamburguesa / Dropdown de Administración */}
+          <div ref={menuRef} className="relative">
             <button
-              onClick={() => {
-                setModoEdicion(!modoEdicion);
-                if (modoCrear) setModoCrear(false); // mutuamente exclusivos
-              }}
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
-                modoEdicion ? "bg-amber-500 shadow-md shadow-amber-500/20" : "bg-bg-app"
+              onClick={() => setShowMenu(!showMenu)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                showMenu
+                  ? "bg-brand/20 border-brand/50 text-brand shadow-lg"
+                  : "bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
               }`}
-              title="Permitir arrastrar y soltar pines para ajustar ubicación de los locales"
+              title="Menú de Administración"
             >
-              <span
-                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                  modoEdicion ? "translate-x-4" : "translate-x-0"
-                }`}
-              />
+              <Menu className="h-4 w-4" />
+              <span className="hidden sm:inline">Administrar</span>
             </button>
-          </div>
 
-          {/* Botón Gestionar Catálogo */}
-          <button
-            onClick={() => setShowCatalogModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
-            title="Administrar catálogo de productos"
-          >
-            <Package className="h-3.5 w-3.5 text-brand" />
-            <span>Productos</span>
-          </button>
+            {/* Dropdown Content */}
+            {showMenu && (
+              <div className="absolute right-0 mt-2 w-72 bg-bg-surface border border-border rounded-xl shadow-2xl p-4 z-[9999] flex flex-col gap-3 animate-fade-in backdrop-blur-xl">
+                <div className="flex items-center justify-between border-b border-border pb-2">
+                  <span className="text-xs font-black text-text-primary uppercase tracking-wider">
+                    Módulos y Acciones
+                  </span>
+                  <div className="bg-brand/10 text-brand py-0.5 px-2 rounded-full text-[10px] font-bold">
+                    {clientes.length} locales
+                  </div>
+                </div>
 
-          {/* Botón Consolidado de Compras */}
-          <button
-            onClick={() => setShowConsolidateModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
-            title="Ver pedido consolidado de mercancía"
-          >
-            <ClipboardList className="h-3.5 w-3.5 text-brand" />
-            <span>Consolidado</span>
-          </button>
+                {/* Ajustar Ubicación Switch */}
+                <div className="flex items-center justify-between bg-bg-surface-2 border border-border px-3 py-2 rounded-lg">
+                  <span className="text-[11px] font-bold text-text-secondary select-none">
+                    Ajustar Ubicación
+                  </span>
+                  <button
+                    onClick={() => {
+                      setModoEdicion(!modoEdicion);
+                      if (modoCrear) setModoCrear(false); // mutuamente exclusivos
+                    }}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
+                      modoEdicion ? "bg-amber-500 shadow-md shadow-amber-500/20" : "bg-bg-app"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                        modoEdicion ? "translate-x-4" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
 
-          {/* Botón Lista de Compras (comprador en terreno) */}
-          <button
-            onClick={() => window.open('/compras', '_blank')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/50"
-            title="Abrir lista de compras para el comprador en terreno"
-          >
-            <ShoppingCart className="h-3.5 w-3.5" />
-            <span>Lista Compras</span>
-          </button>
+                {/* Módulos en lista limpia */}
+                <div className="flex flex-col gap-1.5">
+                  {/* Productos */}
+                  <button
+                    onClick={() => { setShowCatalogModal(true); setShowMenu(false); }}
+                    className="flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-all text-text-secondary hover:text-text-primary hover:bg-bg-surface-2 hover:border-white/5 border border-transparent cursor-pointer"
+                  >
+                    <Package className="h-4 w-4 text-brand" />
+                    <span>Catálogo de Productos</span>
+                  </button>
 
-          {/* Botón Ruta del Día (repartidor en terreno) */}
-          <button
-            onClick={() => window.open('/ruta', '_blank')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 hover:border-blue-500/50"
-            title="Vista móvil del repartidor para marcar entregas en terreno"
-          >
-            <Truck className="h-3.5 w-3.5" />
-            <span>Ruta del Día</span>
-          </button>
+                  {/* Consolidado */}
+                  <button
+                    onClick={() => { setShowConsolidateModal(true); setShowMenu(false); }}
+                    className="flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-all text-text-secondary hover:text-text-primary hover:bg-bg-surface-2 hover:border-white/5 border border-transparent cursor-pointer"
+                  >
+                    <ClipboardList className="h-4 w-4 text-brand" />
+                    <span>Consolidado de Compras</span>
+                  </button>
 
-          {/* Botón Invitar eliminado: flujo inbound only — el almacenero contacta a Jaime primero */}
+                  {/* Ventanas de Pedido */}
+                  <button
+                    onClick={() => { setShowVentanasModal(true); setShowMenu(false); }}
+                    className="flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-all text-text-secondary hover:text-text-primary hover:bg-bg-surface-2 hover:border-white/5 border border-transparent cursor-pointer"
+                  >
+                    <Calendar className="h-4 w-4 text-amber-500" />
+                    <span>Ventanas de Pedido</span>
+                  </button>
 
-          <button
-            onClick={() => { setLoading(true); fetchClientes(); }}
-            className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-surface-2 transition-colors cursor-pointer"
-            title="Refrescar"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </button>
+                  <div className="h-px bg-border my-1" />
 
-          {/* Botón Ajustes de Bot */}
-          <button
-            onClick={() => window.location.href = '/admin-bot'}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
-            title="Configuración de Asistente Virtual (Bot)"
-          >
-            <Bot className="h-3.5 w-3.5 text-blue-400" />
-            <span>Configurar Bot</span>
-          </button>
+                  {/* Lista de Compras (Terreno) */}
+                  <button
+                    onClick={() => { window.open('/compras', '_blank'); setShowMenu(false); }}
+                    className="flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-all text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 cursor-pointer"
+                  >
+                    <ShoppingCart className="h-4 w-4" />
+                    <span>Lista de Compras (Terreno)</span>
+                  </button>
 
-          {/* Botón Gestión de Trabajadores */}
-          <button
-            onClick={() => window.location.href = '/admin-trabajadores'}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
-            title="Gestión de Personal y Permisos"
-          >
-            <Users className="h-3.5 w-3.5 text-emerald-450" />
-            <span>Gestionar Personal</span>
-          </button>
+                  {/* Ruta del Día (Reparto) */}
+                  <button
+                    onClick={() => { window.open('/ruta', '_blank'); setShowMenu(false); }}
+                    className="flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-all text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 cursor-pointer"
+                  >
+                    <Truck className="h-4 w-4" />
+                    <span>Ruta del Día (Reparto)</span>
+                  </button>
 
-          {/* Botón Ventanas de Pedido */}
-          <button
-            onClick={() => setShowVentanasModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
-            title="Gestión de Ventanas de Tiempo y Reparto"
-          >
-            <Calendar className="h-3.5 w-3.5 text-amber-500" />
-            <span>Ventanas de Pedido</span>
-          </button>
+                  <div className="h-px bg-border my-1" />
 
-          {/* Leyenda de prioridad */}
-          <div className="hidden sm:flex items-center gap-3 text-[10px] text-text-dim bg-bg-surface-2 py-1.5 px-3 rounded-full border border-border">
-            {Object.entries(PRIORIDAD_COLORES).map(([label, color]) => (
-              <div key={label} className="flex items-center gap-1">
-                <div
-                  className="h-2 w-2 rounded-full"
-                  style={{ background: color }}
-                />
-                {label}
+                  {/* Configurar Bot */}
+                  <button
+                    onClick={() => { window.location.href = '/admin-bot'; setShowMenu(false); }}
+                    className="flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-all text-text-secondary hover:text-text-primary hover:bg-bg-surface-2 hover:border-white/5 border border-transparent cursor-pointer"
+                  >
+                    <Bot className="h-4 w-4 text-blue-400" />
+                    <span>Configurar Bot de WhatsApp</span>
+                  </button>
+
+                  {/* Gestionar Personal */}
+                  <button
+                    onClick={() => { window.location.href = '/admin-trabajadores'; setShowMenu(false); }}
+                    className="flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-all text-text-secondary hover:text-text-primary hover:bg-bg-surface-2 hover:border-white/5 border border-transparent cursor-pointer"
+                  >
+                    <Users className="h-4 w-4 text-emerald-400" />
+                    <span>Gestionar Personal</span>
+                  </button>
+                </div>
+
+                {/* Leyenda de prioridad dentro del menú */}
+                <div className="flex flex-col gap-2 border-t border-border pt-3 mt-1">
+                  <span className="text-[10px] font-black text-text-dim uppercase tracking-wider">
+                    Leyenda de Prioridad
+                  </span>
+                  <div className="flex items-center gap-3 text-[10px] text-text-secondary">
+                    {Object.entries(PRIORIDAD_COLORES).map(([label, color]) => (
+                      <div key={label} className="flex items-center gap-1">
+                        <div
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{ background: color }}
+                        />
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-            ))}
-          </div>
-
-          <div className="bg-bg-surface-2 border border-border py-1 px-2.5 rounded-full text-[11px] text-text-secondary font-medium">
-            {clientes.length} locales
+            )}
           </div>
         </div>
       </header>
@@ -1461,19 +1581,63 @@ export default function AdminLukePage() {
               </div>
             </div>
 
+            {/* Filtros y Buscador */}
+            <div className="bg-bg-surface-2 border-b border-border p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Buscador */}
+              <div>
+                <label className="block text-[9px] font-bold text-text-dim uppercase mb-1">Buscar Producto o SKU</label>
+                <input
+                  type="text"
+                  value={filtroNombreSku}
+                  onChange={(e) => setFiltroNombreSku(e.target.value)}
+                  placeholder="Ej: Harina o LD-00001"
+                  className="w-full bg-bg-surface border border-border rounded-xl px-3 py-2 text-xs text-text-primary placeholder:text-text-dim focus:outline-none focus:border-brand/40"
+                />
+              </div>
+
+              {/* Categoría Comercial */}
+              <div>
+                <label className="block text-[9px] font-bold text-text-dim uppercase mb-1">Filtrar por Categoría</label>
+                <select
+                  value={filtroCategoria}
+                  onChange={(e) => setFiltroCategoria(e.target.value)}
+                  className="w-full bg-bg-surface border border-border rounded-xl px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand/40 cursor-pointer"
+                >
+                  <option value="Todas">Todas las Categorías</option>
+                  {["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"].map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Tipo de Bulto */}
+              <div>
+                <label className="block text-[9px] font-bold text-text-dim uppercase mb-1">Filtrar por Tipo de Bulto</label>
+                <select
+                  value={filtroBulto}
+                  onChange={(e) => setFiltroBulto(e.target.value)}
+                  className="w-full bg-bg-surface border border-border rounded-xl px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand/40 cursor-pointer"
+                >
+                  <option value="Todos">Todos los Pesos</option>
+                  <option value="Estándar">Estándar</option>
+                  <option value="Pesado">Pesado</option>
+                </select>
+              </div>
+            </div>
+
             {/* Product List */}
             <div className="flex-1 overflow-y-auto p-5">
-              {productos.length === 0 ? (
+              {productosFiltrados.length === 0 ? (
                 <div className="h-48 flex flex-col items-center justify-center text-center text-text-dim">
                   <Package className="h-10 w-10 text-border mb-2 stroke-[1.5]" />
-                  <p className="text-sm font-semibold">No hay productos en el catálogo</p>
-                  <p className="text-xs mt-0.5">Haz clic en "Nuevo Producto" para agregar uno.</p>
+                  <p className="text-sm font-semibold">No se encontraron productos</p>
+                  <p className="text-xs mt-0.5">Ajusta los filtros o crea un nuevo producto.</p>
                 </div>
               ) : (
                 <>
                   {/* Vista Mobile: Lista de Tarjetas (Cards) */}
                   <div className="block md:hidden space-y-3">
-                    {productos.map((prod) => (
+                    {productosPaginados.map((prod) => (
                       <div key={prod.id} className="bg-bg-surface-2 border border-border/60 rounded-2xl p-4 flex flex-col gap-3">
                         <div className="flex items-center gap-3">
                           <div className="w-12 h-12 rounded-xl overflow-hidden bg-bg-surface-3 flex items-center justify-center shrink-0 border border-border">
@@ -1489,7 +1653,7 @@ export default function AdminLukePage() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <h4 className="font-bold text-sm text-text-primary truncate">{cleanText(prod.nombre)}</h4>
-                            <p className="text-xs text-text-dim">{cleanText(prod.formato_venta)}</p>
+                            <p className="text-xs text-text-dim">{cleanText(prod.formato_venta)} {prod.sku && `· ${prod.sku}`}</p>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
                             <button
@@ -1555,7 +1719,8 @@ export default function AdminLukePage() {
                       <thead>
                         <tr className="border-b border-border text-text-dim uppercase tracking-wider text-[9px] font-bold">
                           <th className="pb-3 pl-2 w-14">Imagen</th>
-                          <th className="pb-3 w-[35%]">Nombre</th>
+                          <th className="pb-3 w-[12%]">SKU</th>
+                          <th className="pb-3 w-[30%]">Nombre</th>
                           <th className="pb-3 w-[15%]">Formato</th>
                           <th className="pb-3 w-24">Precio Venta</th>
                           <th className="pb-3 w-24">Costo</th>
@@ -1565,7 +1730,7 @@ export default function AdminLukePage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border/40">
-                        {productos.map((prod) => (
+                        {productosPaginados.map((prod) => (
                           <tr key={prod.id} className="hover:bg-bg-surface-2/30 transition-colors">
                             <td className="py-3 pl-2">
                               <div className="w-10 h-10 rounded-xl overflow-hidden bg-bg-surface-2 border border-border flex items-center justify-center shrink-0">
@@ -1580,6 +1745,7 @@ export default function AdminLukePage() {
                                 )}
                               </div>
                             </td>
+                            <td className="py-3 font-mono text-[10px] text-text-dim">{prod.sku || "-"}</td>
                             <td className="py-3 font-semibold text-text-primary pr-3 leading-relaxed break-words">{cleanText(prod.nombre)}</td>
                             <td className="py-3 pr-3 font-medium text-text-secondary break-words">{cleanText(prod.formato_venta)}</td>
                             <td className="py-3 font-bold text-text-primary">${prod.precio.toLocaleString("es-CL")}</td>
@@ -1630,6 +1796,42 @@ export default function AdminLukePage() {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Paginación */}
+                  {totalPaginas > 1 && (
+                    <div className="flex items-center justify-between border-t border-border/40 pt-4 mt-4 px-2 text-xs">
+                      <span className="text-text-dim">
+                        Mostrando productos {indexPrimerItem + 1} - {Math.min(indexUltimoItem, productosFiltrados.length)} de {productosFiltrados.length}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
+                          disabled={paginaActual === 1}
+                          className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${
+                            paginaActual === 1
+                              ? "bg-bg-surface border-border/30 text-text-dim cursor-not-allowed"
+                              : "bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
+                          }`}
+                        >
+                          Anterior
+                        </button>
+                        <span className="text-text-secondary font-semibold">
+                          Página {paginaActual} de {totalPaginas}
+                        </span>
+                        <button
+                          onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
+                          disabled={paginaActual === totalPaginas}
+                          className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${
+                            paginaActual === totalPaginas
+                              ? "bg-bg-surface border-border/30 text-text-dim cursor-not-allowed"
+                              : "bg-bg-surface-2 border-border text-text-secondary hover:text-text-primary hover:border-white/10"
+                          }`}
+                        >
+                          Siguiente
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -1778,6 +1980,20 @@ export default function AdminLukePage() {
                   value={productForm.nombre}
                   onChange={(e) => setProductForm({ ...productForm, nombre: e.target.value })}
                   placeholder="Ej: Harina sin Polvos 1kg"
+                  className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
+                />
+              </div>
+
+              {/* SKU */}
+              <div>
+                <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                  SKU (Código Único - Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={productForm.sku}
+                  onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })}
+                  placeholder="Ej: LD-00013 (Dejar vacío para autogenerar)"
                   className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
                 />
               </div>
