@@ -8,6 +8,13 @@ let catalogoCache = { text: null, ts: 0 };
 const CATALOGO_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
 // ============================================================
+// COLA DE DEBOUNCE (AGRUPACIÓN EN RÁFAGA DE MENSAJES DE WHATSAPP)
+// ============================================================
+const ráfagaColas = new Map();
+const DEBOUNCE_MS = 2000;
+
+
+// ============================================================
 // MEJORA 4: Genera y guarda un resumen de conversación
 // Se llama de forma asíncrona (fire & forget) sin bloquear la respuesta al usuario
 // ============================================================
@@ -65,7 +72,9 @@ export default async function handler(req, res) {
     console.warn("[whatsapp-incoming] ⚠️ WA_BRIDGE_SECRET no configurado. Autenticación del puente desactivada.");
   }
 
-  const { phone, jid, message, audio, senderPn } = req.body;
+  const { phone, jid, senderPn } = req.body;
+  let { message, audio } = req.body;
+
 
   if (!phone || (!message && !audio)) {
     return res
@@ -121,9 +130,83 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, message: "Bot silenciado temporalmente por desviación." });
     }
 
+    // 💡 Simular estado de escribiendo/grabando en WhatsApp
+    const destJid = jid || `${phoneClean}@s.whatsapp.net`;
+    const presenceState = audio ? 'recording' : 'composing';
+    const bridgeUrl = process.env.WA_BRIDGE_URL || "http://localhost:3015";
+    fetch(`${bridgeUrl}/presence`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: destJid, state: presenceState })
+    }).catch(err => console.error("[whatsapp-incoming] Error enviando presencia:", err.message));
+
+    // --- LÓGICA DE DEBOUNCE / RÁFAGA ---
+    let sesion = ráfagaColas.get(phoneClean);
+    const esPrimerMensaje = !sesion;
+
+    if (esPrimerMensaje) {
+      let resolveFunction;
+      const promise = new Promise((resolve) => {
+        resolveFunction = resolve;
+      });
+      sesion = {
+        messages: [],
+        audios: [],
+        resolve: resolveFunction,
+        promise: promise,
+        timer: null
+      };
+      ráfagaColas.set(phoneClean, sesion);
+    }
+
+    if (message && message.trim()) {
+      sesion.messages.push(message.trim());
+    }
+    if (audio && audio.data) {
+      sesion.audios.push(audio);
+    }
+
+    if (sesion.timer) {
+      clearTimeout(sesion.timer);
+    }
+
+    sesion.timer = setTimeout(() => {
+      sesion.resolve();
+    }, DEBOUNCE_MS);
+
+    if (!esPrimerMensaje) {
+      return res.status(200).json({ success: true, message: "Agrupado en ráfaga de mensajes" });
+    }
+
+    // Esperar a que la ráfaga termine
+    await sesion.promise;
+
+    // Consolidar variables de la ráfaga
+    let tieneAudioRáfaga = false;
+    let tieneMensajesTexto = false;
+    const sesionConsolidada = ráfagaColas.get(phoneClean);
+    if (sesionConsolidada) {
+      message = sesionConsolidada.messages.join("\n");
+      audio = sesionConsolidada.audios[0] || null;
+      tieneAudioRáfaga = sesionConsolidada.audios.length > 0;
+      tieneMensajesTexto = sesionConsolidada.messages.length > 0;
+      
+      console.log(`[whatsapp-incoming] 🚀 Ráfaga consolidada para ${phoneClean}: ${sesionConsolidada.messages.length} textos, ${sesionConsolidada.audios.length} audios.`);
+      
+      // Remover de la cola global asegurando que no borremos una nueva sesión paralela
+      const s = ráfagaColas.get(phoneClean);
+      if (s && s.promise === sesion.promise) {
+        ráfagaColas.delete(phoneClean);
+      }
+    }
+
     // MEJORA 1: Registrar mensaje de entrada en el historial
     // Para notas de voz, guardamos placeholder temporal que se actualizará con la transcripción real
-    const textoMensaje = audio ? "[Nota de Voz]" : message;
+    let textoMensaje = audio ? "[Nota de Voz]" : message;
+    if (tieneAudioRáfaga && tieneMensajesTexto) {
+      textoMensaje = `[Nota de Voz] ${message}`;
+    }
+
     let mensajeChatId = null;
     try {
       const { data: msgInsertado } = await supabase
@@ -137,8 +220,70 @@ export default async function handler(req, res) {
         .single();
       if (msgInsertado) mensajeChatId = msgInsertado.id;
     } catch (histErr) {
-      console.error("[whatsapp-incoming] Error guardando mensaje en historial:", histErr.message);
+      console.error("[whatsapp-incoming] Error guardando mensaje consolidado en historial:", histErr.message);
     }
+
+    // --- BYPASS RÁPIDO PARA SOPORTE HUMANO ---
+    const msgLowerSoporte = message ? message.toLowerCase().trim() : "";
+    const esSolicitudSoporte =
+      msgLowerSoporte.includes("soporte") ||
+      msgLowerSoporte.includes("humano") ||
+      msgLowerSoporte.includes("atencion humana") ||
+      msgLowerSoporte.includes("atención humana") ||
+      msgLowerSoporte.includes("hablar con alguien") ||
+      msgLowerSoporte.includes("hablar con un humano") ||
+      msgLowerSoporte.includes("hablar con una persona") ||
+      msgLowerSoporte.includes("asesor") ||
+      msgLowerSoporte.includes("ejecutivo") ||
+      msgLowerSoporte.includes("ayuda humana");
+
+    if (esSolicitudSoporte) {
+      const veinticuatroHorasMas = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      
+      // Guardar bloqueo de forma universal en whatsapp_bloqueos
+      const { error: errorBloqueo } = await supabase
+        .from("whatsapp_bloqueos")
+        .upsert({
+          whatsapp: phoneClean,
+          silenciado_hasta: veinticuatroHorasMas,
+          motivo: "Solicitud de soporte humano (Bypass directo)"
+        });
+
+      if (cliente) {
+        await supabase
+          .from("clientes")
+          .update({ bot_silenciado_hasta: veinticuatroHorasMas })
+          .eq("id", cliente.id);
+      }
+
+      const responseText = cliente
+        ? `Entendido, ${cliente.nombre_contacto}. He pausado mis respuestas automáticas por 24 horas para que un asesor de LukeDelivery revise tu chat y te contacte directamente. ¡Que tengas un buen día! 📦`
+        : `Entendido. He pausado mis respuestas automáticas por 24 horas para que un asesor de LukeDelivery revise tu chat y te contacte directamente. ¡Te escribiremos pronto! 📦`;
+
+      // Registrar en historial
+      try {
+        await supabase
+          .from("mensajes_chat")
+          .insert([{
+            whatsapp: phoneClean,
+            remitente: "asistente",
+            contenido: responseText
+          }]);
+      } catch (histErr) {
+        console.error("[whatsapp-incoming] Error guardando respuesta de soporte en historial:", histErr.message);
+      }
+
+      // Enviar respuesta a WhatsApp
+      const destinatario = jid || `${phoneClean}@s.whatsapp.net`;
+      await fetch(`${bridgeUrl}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: destinatario, text: responseText })
+      }).catch(err => console.error("[whatsapp-incoming] Error enviando respuesta de soporte:", err.message));
+
+      return res.status(200).json({ success: true, responseText });
+    }
+
 
     // Si encontramos al cliente pero no tenía el LID registrado, lo registramos ahora de forma automática (self-healing)
     if (cliente && lidClean && cliente.whatsapp_lid !== lidClean) {
@@ -532,6 +677,14 @@ ${infoVentanaPrompt}
             }
           },
           {
+            name: "solicitar_soporte_humano",
+            description: "Pausa las respuestas del bot y solicita la intervención de un asesor u operador humano. Usa esta función cuando el usuario pida hablar con una persona, un agente, ayuda humana o soporte técnico.",
+            parameters: {
+              type: "OBJECT",
+              properties: {}
+            }
+          },
+          {
             name: "consultar_pedidos_cliente",
             description: "Recupera la lista de pedidos activos y recientes realizados por el usuario actual (almacenero) para informarle sobre su estado (Pendiente, Preparando, En Ruta, Entregado, Cancelado), el total a pagar, el flete, y el detalle de los productos. No requiere parámetros.",
             parameters: {
@@ -784,6 +937,29 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                   dbResult = errorBloqueo
                     ? `Error al silenciar en bloqueos: ${errorBloqueo.message}`
                     : `Éxito: El usuario ha sido bloqueado en Supabase hasta ${cincoHorasMas} debido a: ${motivo}. Debes avisarle claramente al usuario en tu respuesta que debido a que sus consultas se desvían de las compras, tu sistema se pausará y no podrás responderle en las próximas 5 horas.`;
+                }
+                else if (name === "solicitar_soporte_humano") {
+                  const veinticuatroHorasMas = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+                  
+                  // Guardar bloqueo de forma universal en whatsapp_bloqueos
+                  const { error: errorBloqueo } = await supabase
+                    .from("whatsapp_bloqueos")
+                    .upsert({
+                      whatsapp: phoneClean,
+                      silenciado_hasta: veinticuatroHorasMas,
+                      motivo: "Solicitud de soporte humano (vía IA)"
+                    });
+
+                  if (cliente) {
+                    await supabase
+                      .from("clientes")
+                      .update({ bot_silenciado_hasta: veinticuatroHorasMas })
+                      .eq("id", cliente.id);
+                  }
+
+                  dbResult = errorBloqueo
+                    ? `Error al pausar el bot: ${errorBloqueo.message}`
+                    : `Éxito: El bot ha sido silenciado en Supabase por 24 horas (hasta ${veinticuatroHorasMas}) debido a solicitud de soporte humano. Debes informarle amablemente al usuario que has pausado tus respuestas automáticas y que un asesor de LukeDelivery se contactará con él a la brevedad.`;
                 }
                 else if (name === "consultar_pedidos_cliente") {
                   if (!cliente) {

@@ -256,6 +256,29 @@ app.post('/send', async (req, res) => {
   }
 });
 
+// Enviar estado de presencia (escribiendo, grabando audio, etc.)
+app.post('/presence', async (req, res) => {
+  const { to, state } = req.body;
+  
+  if (!to || !state) {
+    return res.status(400).json({ success: false, message: 'Falta destinatario (to) o estado (state)' });
+  }
+
+  if (connectionState !== 'connected' || !sock) {
+    return res.status(503).json({ success: false, message: 'WhatsApp no está conectado' });
+  }
+
+  try {
+    const formattedNum = to.includes('@') ? to : `${to.replace(/[^0-9]/g, '')}@s.whatsapp.net`;
+    await sock.sendPresenceUpdate(state, formattedNum);
+    res.json({ success: true, message: `Estado de presencia ${state} enviado con éxito` });
+  } catch (err) {
+    console.error('Error al enviar presencia en wa-bridge:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
 // Iniciar Express
 app.listen(PORT, () => {
   console.log(`Servidor Express de pasarela corriendo en el puerto ${PORT}`);
