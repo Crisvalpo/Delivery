@@ -694,7 +694,7 @@ ${historialTexto}
 INSTRUCCIÓN IMPORTANTE PARA ESTA NOTA DE VOZ (MEJORA 1):
 Tu respuesta DEBE seguir EXACTAMENTE este formato de dos secciones, sin excepción:
 TRANSCRIPCIÓN: [transcribe aquí literalmente lo que dijo el usuario en la nota de voz, sin añadir nada]
-RESPUESTA: [escribe aquí tu respuesta al usuario, siguiendo tus normas, el catálogo y el historial. Si el usuario se desvía repetidamente del propósito comercial, utiliza la herramienta de silenciado]`
+RESPUESTA: [escribe aquí tu respuesta al usuario, siguiendo tus normas, el catálogo y el historial. Si el usuario se desvía de forma insistente (tras haberle advertido amablemente) o vulgar del propósito comercial, utiliza la herramienta de silenciado. No silencies ante saludos o cortesías iniciales.]`
           });
         } else {
           parts.push({
@@ -708,7 +708,7 @@ Historial de conversación reciente:
 ${historialTexto}
 
 Mensaje del usuario: "${message}"
-Respuesta del asistente (si el usuario se desvía repetidamente de las consultas comerciales o de compras de LukeDelivery, debes invocar la herramienta de silenciado):`
+Respuesta del asistente (si el usuario se desvía de forma insistente (tras haberle advertido amablemente) o vulgar/ofensiva de las consultas comerciales o de compras de LukeDelivery, debes invocar la herramienta de silenciado. NO uses esta herramienta ante saludos educados, preguntas de cortesía iniciales o consultas legítimas):`
           });
         }
 
