@@ -839,14 +839,14 @@ Instrucciones para atender a este usuario:
                       categoria_logistica: {
                         type: "STRING",
                         enum: ["Pesado", "Estándar"],
-                        description: "La categoría logística. Usa 'Pesado' si pesa más de 5kg o es muy grande/voluminoso, de lo contrario usa 'Estándar'."
+                        description: "La categoría logística. Opcional. Usa 'Pesado' si pesa más de 5kg o es muy grande/voluminoso, de lo contrario no la envíes (el sistema la asumirá como 'Estándar')."
                       },
                       url_imagen_retail: {
                         type: "STRING",
                         description: "La URL directa de la imagen del producto (opcional). Solo suministrar si el usuario la provee explícitamente en el mensaje."
                       }
                     },
-                    required: ["nombre", "formato_venta", "precio_costo", "categoria_logistica"]
+                    required: ["nombre", "formato_venta", "precio_costo"]
                   }
                 },
                 {
@@ -1241,6 +1241,8 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                     ? url_imagen_retail.trim()
                     : "https://cdn.pesco.cl/wp-content/uploads/2021/03/producto_sin_imagen.png";
 
+                  const finalLogistica = categoria_logistica || "Estándar";
+
                   const { error } = await supabase
                     .from("productos")
                     .insert([{
@@ -1248,7 +1250,7 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                       formato_venta,
                       precio: precioVentaFinal,
                       precio_costo,
-                      categoria_logistica,
+                      categoria_logistica: finalLogistica,
                       url_imagen_retail: finalImgUrl,
                       disponible: true,
                       activo: true
