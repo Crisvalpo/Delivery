@@ -130,6 +130,7 @@ export default function RegistroPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [gpsErrorMsg, setGpsErrorMsg] = useState(null);
   const [success, setSuccess] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
 
@@ -157,29 +158,57 @@ export default function RegistroPage() {
     "Fiambrería",
   ];
 
-  // --- Captura de GPS ---
+  // --- Captura de GPS (con fallback para iPhone) ---
   const obtenerGPS = () => {
     if (!("geolocation" in navigator)) {
       setGpsStatus("error");
-      setError("Tu navegador no soporta geolocalización.");
+      setGpsErrorMsg("Tu navegador no soporta geolocalización. Intenta desde Safari en iPhone.");
       return;
     }
 
     setGpsStatus("loading");
+    setGpsErrorMsg(null);
     setError(null);
 
+    const onSuccess = (position) => {
+      setLatitud(position.coords.latitude);
+      setLongitud(position.coords.longitude);
+      setGpsStatus("success");
+      setGpsErrorMsg(null);
+    };
+
+    const onError = (err) => {
+      console.warn("[LukeDelivery GPS] Error high accuracy:", err.code, err.message);
+      // En iPhone, intentar con baja precisión como fallback
+      navigator.geolocation.getCurrentPosition(
+        onSuccess,
+        (err2) => {
+          console.warn("[LukeDelivery GPS] Error low accuracy fallback:", err2.code, err2.message);
+          setGpsStatus("error");
+          if (err2.code === 1) {
+            // PERMISSION_DENIED
+            setGpsErrorMsg(
+              "Acceso a ubicación denegado. En iPhone: ve a Configuración → Safari → Ubicación → Permitir. Luego recarga esta página."
+            );
+          } else if (err2.code === 2) {
+            // POSITION_UNAVAILABLE
+            setGpsErrorMsg("No se pudo obtener tu ubicación. Asegúrate de estar al aire libre o cerca de una ventana e inténtalo de nuevo.");
+          } else if (err2.code === 3) {
+            // TIMEOUT
+            setGpsErrorMsg("La búsqueda de GPS tomó demasiado tiempo. Inténtalo de nuevo en un lugar con mejor señal.");
+          } else {
+            setGpsErrorMsg("No se pudo obtener tu ubicación. Inténtalo de nuevo.");
+          }
+        },
+        { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 }
+      );
+    };
+
+    // Primer intento: alta precisión (GPS real)
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLatitud(position.coords.latitude);
-        setLongitud(position.coords.longitude);
-        setGpsStatus("success");
-      },
-      (err) => {
-        console.warn("[LukeDelivery GPS] Error:", err.message);
-        setGpsStatus("error");
-        // No bloqueamos, solo advertimos
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
+      onSuccess,
+      onError,
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 
@@ -333,7 +362,7 @@ export default function RegistroPage() {
         <title>Registrar mi Almacén | LukeDelivery</title>
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+          content="width=device-width, initial-scale=1"
         />
         <meta
           name="description"
@@ -526,6 +555,15 @@ export default function RegistroPage() {
                     </>
                   )}
                 </button>
+
+                {gpsStatus === "error" && gpsErrorMsg && (
+                  <div className="bg-red-50 border border-red-200 rounded-2xl p-3 flex gap-2 items-start">
+                    <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-700 font-semibold leading-relaxed">
+                      {gpsErrorMsg}
+                    </p>
+                  </div>
+                )}
 
                 {gpsStatus === "success" && (
                   <div className="text-center text-[10px] font-mono text-slate-400 font-bold">
