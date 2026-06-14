@@ -118,11 +118,13 @@ async function connectToWhatsApp() {
 
       const messageText = msg.message?.conversation || 
                           msg.message?.extendedTextMessage?.text || 
+                          msg.message?.imageMessage?.caption ||
                           '';
 
       const isAudio = !!msg.message?.audioMessage;
+      const isImage = !!msg.message?.imageMessage;
 
-      if (!messageText.trim() && !isAudio) continue;
+      if (!messageText.trim() && !isAudio && !isImage) continue;
 
       let audioData = null;
       if (isAudio) {
@@ -145,8 +147,35 @@ async function connectToWhatsApp() {
         } catch (downloadErr) {
           console.error('[wa-bridge] Error descargando audioMessage:', downloadErr.message);
         }
-      } else {
+      }
+
+      let imageData = null;
+      if (isImage) {
+        console.log(`[wa-bridge] Mensaje de imagen recibido de ${senderNumber}. Descargando media...`);
+        try {
+          const buffer = await downloadMediaMessage(
+            msg,
+            'buffer',
+            {},
+            {
+              logger: pino({ level: 'silent' }),
+              reuploadRequest: sock.updateMediaMessage
+            }
+          );
+          imageData = {
+            data: buffer.toString('base64'),
+            mimeType: msg.message.imageMessage.mimetype || 'image/jpeg'
+          };
+          console.log(`[wa-bridge] Imagen descargada y codificada en Base64 con éxito.`);
+        } catch (downloadErr) {
+          console.error('[wa-bridge] Error descargando imageMessage:', downloadErr.message);
+        }
+      }
+
+      if (!isAudio && !isImage) {
         console.log(`Mensaje recibido de ${senderNumber}: "${messageText}"`);
+      } else if (isImage) {
+        console.log(`Mensaje de imagen recibido de ${senderNumber} con caption: "${messageText}"`);
       }
 
       if (senderNumber.endsWith('@lid')) {
@@ -167,6 +196,7 @@ async function connectToWhatsApp() {
             jid: senderNumber,
             message: messageText,
             audio: audioData,
+            image: imageData,
             timestamp: msg.messageTimestamp,
             // Enviamos información adicional por si viene el senderPn
             senderPn: msg.key.senderPn || null

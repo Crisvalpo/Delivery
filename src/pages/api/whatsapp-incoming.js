@@ -72,17 +72,17 @@ export default async function handler(req, res) {
     console.warn("[whatsapp-incoming] ⚠️ WA_BRIDGE_SECRET no configurado. Autenticación del puente desactivada.");
   }
 
-  const { phone, jid, senderPn } = req.body;
+  const { phone, jid, senderPn, image } = req.body;
   let { message, audio } = req.body;
 
 
-  if (!phone || (!message && !audio)) {
+  if (!phone || (!message && !audio && !image)) {
     return res
       .status(400)
-      .json({ success: false, message: "Campos 'phone' y alguno de 'message' o 'audio' son requeridos." });
+      .json({ success: false, message: "Campos 'phone' y alguno de 'message', 'audio' o 'image' son requeridos." });
   }
 
-  console.log(`[whatsapp-incoming] Mensaje de ${phone} (JID: ${jid}, senderPn: ${senderPn}): ${audio ? '[Nota de Voz]' : `"${message}"`}`);
+  console.log(`[whatsapp-incoming] Mensaje de ${phone} (JID: ${jid}, senderPn: ${senderPn}): ${audio ? '[Nota de Voz]' : (image ? '[Foto]' : `"${message}"`)}`);
 
   // Preferir senderPn si está disponible, sino usar phone
   let searchPhone = phone;
@@ -171,6 +171,7 @@ export default async function handler(req, res) {
       sesion = {
         messages: [],
         audios: [],
+        image: null,
         resolve: resolveFunction,
         promise: promise,
         timer: null
@@ -183,6 +184,9 @@ export default async function handler(req, res) {
     }
     if (audio && audio.data) {
       sesion.audios.push(audio);
+    }
+    if (image && image.data) {
+      sesion.image = image;
     }
 
     if (sesion.timer) {
@@ -203,14 +207,16 @@ export default async function handler(req, res) {
     // Consolidar variables de la ráfaga
     let tieneAudioRáfaga = false;
     let tieneMensajesTexto = false;
+    let imageConsolidada = null;
     const sesionConsolidada = ráfagaColas.get(phoneClean);
     if (sesionConsolidada) {
       message = sesionConsolidada.messages.join("\n");
       audio = sesionConsolidada.audios[0] || null;
+      imageConsolidada = sesionConsolidada.image || null;
       tieneAudioRáfaga = sesionConsolidada.audios.length > 0;
       tieneMensajesTexto = sesionConsolidada.messages.length > 0;
       
-      console.log(`[whatsapp-incoming] 🚀 Ráfaga consolidada para ${phoneClean}: ${sesionConsolidada.messages.length} textos, ${sesionConsolidada.audios.length} audios.`);
+      console.log(`[whatsapp-incoming] 🚀 Ráfaga consolidada para ${phoneClean}: ${sesionConsolidada.messages.length} textos, ${sesionConsolidada.audios.length} audios, ${sesionConsolidada.image ? '1 imagen' : '0 imágenes'}.`);
       
       // Remover de la cola global asegurando que no borremos una nueva sesión paralela
       const s = ráfagaColas.get(phoneClean);
@@ -224,6 +230,9 @@ export default async function handler(req, res) {
     let textoMensaje = audio ? "[Nota de Voz]" : message;
     if (tieneAudioRáfaga && tieneMensajesTexto) {
       textoMensaje = `[Nota de Voz] ${message}`;
+    }
+    if (imageConsolidada) {
+      textoMensaje = `[Foto] ${textoMensaje}`.trim();
     }
 
     let mensajeChatId = null;
@@ -677,6 +686,51 @@ Instrucciones para atender a este usuario:
           }
         }
 
+        // Subir imagen de trabajador si existe
+        let urlImagenPublicaTemp = null;
+        if (esTrabajador && imageConsolidada && imageConsolidada.data) {
+          try {
+            console.log(`[whatsapp-incoming] Decodificando y subiendo imagen de trabajador a Supabase Storage...`);
+            const imageBuffer = Buffer.from(imageConsolidada.data, 'base64');
+            const fileExt = imageConsolidada.mimeType ? imageConsolidada.mimeType.split('/')[1] : 'jpeg';
+            const randomId = Math.random().toString(36).substring(2, 10);
+            const fileName = `whatsapp_${Date.now()}_${randomId}.${fileExt}`;
+            
+            const { error: uploadError } = await supabase
+              .storage
+              .from('productos')
+              .upload(fileName, imageBuffer, {
+                contentType: imageConsolidada.mimeType || 'image/jpeg',
+                upsert: true
+              });
+            
+            if (uploadError) {
+              console.error("[whatsapp-incoming] Error subiendo imagen a storage:", uploadError.message);
+            } else {
+              const { data: publicUrlData } = supabase
+                .storage
+                .from('productos')
+                .getPublicUrl(fileName);
+              
+              urlImagenPublicaTemp = publicUrlData?.publicUrl;
+              console.log(`[whatsapp-incoming] Imagen subida exitosamente. URL Pública: ${urlImagenPublicaTemp}`);
+            }
+          } catch (storageErr) {
+            console.error("[whatsapp-incoming] Excepción subiendo imagen a storage:", storageErr.message);
+          }
+        }
+
+        if (urlImagenPublicaTemp) {
+          promptSistema += `
+          
+--- IMAGEN ADJUNTADA ---
+El usuario trabajador ha adjuntado una fotografía en este mensaje.
+La imagen ha sido subida y está disponible de forma pública en la siguiente URL.
+Si vas a llamar a las herramientas 'crear_producto' o 'actualizar_detalles_producto' para crear o modificar un producto relacionado con esta foto, DEBES usar exactamente esta URL para los parámetros 'url_imagen_retail' o 'nueva_url_imagen':
+${urlImagenPublicaTemp}
+`;
+        }
+
         // MEJORAS 3 y 4: Historial con filtro de 30 días y soporte de resúmenes de conversación
         const treintaDiasAtras = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const { data: historialCompleto } = await supabase
@@ -918,6 +972,15 @@ Instrucciones para atender a este usuario:
         ];
 
         const parts = [];
+
+        if (imageConsolidada && imageConsolidada.data) {
+          parts.push({
+            inlineData: {
+              mimeType: imageConsolidada.mimeType || "image/jpeg",
+              data: imageConsolidada.data
+            }
+          });
+        }
 
         if (audio && audio.data) {
           parts.push({
