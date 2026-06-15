@@ -93,22 +93,35 @@ export default function AdminTrabajadoresPage() {
         activo: form.activo
       };
 
+      const adminSecret = localStorage.getItem("ld_admin_secret");
+
       if (editingId) {
         // Actualizar existente
-        const { error } = await supabase
-          .from("trabajadores")
-          .update(payload)
-          .eq("id", editingId);
-
-        if (error) throw error;
+        const res = await fetch("/api/admin-trabajadores", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${adminSecret}`
+          },
+          body: JSON.stringify({ id: editingId, ...payload })
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.message || "Error al actualizar trabajador.");
+        
         setStatus({ type: "success", message: "Trabajador actualizado con éxito." });
       } else {
         // Insertar nuevo
-        const { error } = await supabase
-          .from("trabajadores")
-          .insert([payload]);
+        const res = await fetch("/api/admin-trabajadores", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${adminSecret}`
+          },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.message || "Error al registrar trabajador.");
 
-        if (error) throw error;
         setStatus({ type: "success", message: "Nuevo trabajador registrado con éxito." });
       }
 
@@ -128,9 +141,7 @@ export default function AdminTrabajadoresPage() {
       console.error("Error guardando trabajador:", err.message);
       setStatus({
         type: "error",
-        message: err.message.includes("unique") 
-          ? "Este número de WhatsApp ya se encuentra registrado para otro trabajador." 
-          : "Error al intentar guardar la información del trabajador."
+        message: err.message || "Error al intentar guardar la información del trabajador."
       });
     } finally {
       setSaving(false);
@@ -154,12 +165,15 @@ export default function AdminTrabajadoresPage() {
     if (!confirmacion) return;
 
     try {
-      const { error } = await supabase
-        .from("trabajadores")
-        .delete()
-        .eq("id", id);
-
-      if (error) throw error;
+      const adminSecret = localStorage.getItem("ld_admin_secret");
+      const res = await fetch(`/api/admin-trabajadores?id=${id}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${adminSecret}`
+        }
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.message || "Error al eliminar trabajador.");
 
       setStatus({ type: "success", message: `Trabajador ${nombre} eliminado correctamente.` });
       
