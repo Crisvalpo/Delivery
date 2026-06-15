@@ -136,6 +136,8 @@ export default async function handler(req, res) {
     const esClienteRegistrado = cliente && cliente.registro_completo === true;
     const esPreRegistro = cliente && cliente.registro_completo === false;
     const esNoRegistrado = !esTrabajador && !esClienteRegistrado;
+    const rolLimpio = trabajador && trabajador.rol ? trabajador.rol.toLowerCase().trim() : "";
+    const esAdmin = esTrabajador && (rolLimpio === "administrador" || rolLimpio === "vendedor");
 
     // 1.5. Validar si el número (registrado o no) está silenciado en la tabla whatsapp_bloqueos
     const { data: bloqueo, error: bloqueoErr } = await supabase
@@ -605,13 +607,20 @@ Normas de comportamiento:
 
 Reglas de Negocio Críticas (No negociables):
 1. El margen de ganancia actual para calcular los precios de venta a partir del precio de costo es del ${margenPercent}%.
-2. Si eres un administrador (esAdmin = true) y pides agregar un producto al catálogo dando únicamente el precio de costo, NO preguntes por el precio de venta. Llama inmediatamente a la función "crear_producto" omitiendo el parámetro "precio" (el sistema calculará automáticamente el precio de venta agregando el ${margenPercent}% de margen).
-3. Si el administrador proporciona explícitamente tanto el precio de costo como el precio de venta, llama a "crear_producto" pasando ambos parámetros.
-4. Información del estado de Ventanas de Pedidos y despachos:
+2. Información del estado de Ventanas de Pedidos y despachos:
 ${infoVentanaPrompt}
-5. Al crear o actualizar un producto, debes clasificarlo de forma precisa y obligatoria en la categoría comercial más adecuada según el producto, usando estrictamente una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería' o 'Bebidas'.
-6. Antes de llamar a "crear_producto" para registrar un artículo, revisa siempre la lista de productos del catálogo actual que tienes en el contexto. Si ya existe un producto con el mismo nombre y formato, NO lo vuelvas a crear; en su lugar, utiliza la herramienta "actualizar_detalles_producto" para modificar sus precios o detalles.
 `;
+
+        if (esAdmin) {
+          promptSistema += `
+Reglas adicionales de Administrador:
+1. Al agregar un producto al catálogo dando únicamente el precio de costo, NO preguntes por el precio de venta. Llama inmediatamente a la función "crear_producto" omitiendo el parámetro "precio" (el sistema calculará automáticamente el precio de venta agregando el ${margenPercent}% de margen).
+2. Si proporcionas explícitamente tanto el precio de costo como el precio de venta, llama a "crear_producto" pasando ambos parámetros.
+3. Al crear o actualizar un producto, debes clasificarlo de forma precisa y obligatoria en la categoría comercial más adecuada usando estrictamente una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería' o 'Bebidas'.
+4. Antes de llamar a "crear_producto", revisa siempre la lista de productos actual. Si ya existe un producto con el mismo nombre y formato, NO lo vuelvas a crear; en su lugar, utiliza la herramienta "actualizar_detalles_producto".
+`;
+        }
+
 
         // MEJORA 2: Contexto enriquecido según el perfil del usuario en el prompt de Gemini
         if (esTrabajador) {
@@ -784,7 +793,7 @@ ${urlImagenPublicaTemp}
         }
 
         // 3. Validar si el remitente es un trabajador activo y su rol para habilitar herramientas
-        const esAdmin = esTrabajador && (trabajador.rol === "Administrador" || trabajador.rol === "Vendedor");
+        // (esAdmin ya fue definido en la sección de clasificación de perfiles)
 
         // 4. Declarar herramientas basicas y de administrador
         const basicTools = [
