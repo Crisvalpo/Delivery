@@ -695,7 +695,7 @@ Directrices de Meta-Tooling (Desarrollo Dinámico de Herramientas):
    - "nombre_funcion": Nombre único de la función en snake_case (ej. 'obtener_productos_sin_stock_pesados'). Debe empezar con 'obtener_' o 'consultar_'.
    - "descripcion": Lo que hace la función y qué datos retorna de forma descriptiva.
    - "codigo_javascript": Código JS asíncrono compatible con Node.js que realice la consulta a Supabase usando el parámetro 'supabase' y 'args'. **CRÍTICO: Debes desestructurar siempre tus parámetros de entrada desde el objeto 'args' en la primera línea de tu código**. Ejemplo:
-     `const { nombre_producto } = args; const { data, error } = await supabase.from("productos").select("sku").eq("nombre", nombre_producto); if (error) throw error; return data;`
+     \`const { nombre_producto } = args; const { data, error } = await supabase.from("productos").select("sku").eq("nombre", nombre_producto); if (error) throw error; return data;\`
      No uses variables libres o globales; todo parámetro debe salir de 'args'. Retorna siempre el resultado de la consulta.
    - "esquema_json": El objeto parameters que define el schema de Gemini Function Calling (tipo, properties, required). Si no requiere parámetros de entrada, pasa { "type": "OBJECT", "properties": {} }.
 3. Está terminantemente PROHIBIDO inventar campos o tablas.
