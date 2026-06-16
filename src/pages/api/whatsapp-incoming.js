@@ -618,6 +618,7 @@ Reglas adicionales de Administrador:
 2. Si proporcionas explícitamente tanto el precio de costo como el precio de venta, llama a "crear_producto" pasando ambos parámetros.
 3. Al crear o actualizar un producto, debes clasificarlo de forma precisa y obligatoria en la categoría comercial más adecuada usando estrictamente una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería' o 'Bebidas'.
 4. Antes de llamar a "crear_producto", revisa siempre la lista de productos actual. Si ya existe un producto con el mismo nombre y formato, NO lo vuelvas a crear; en su lugar, utiliza la herramienta "actualizar_detalles_producto".
+5. Al crear un nuevo producto con "crear_producto", NO solicites fotos ni imágenes al administrador si no las proporciona voluntariamente. El sistema tiene una imagen placeholder por defecto, por lo que simplemente omite el parámetro "url_imagen_retail".
 `;
 
           // Mapa del Mundo (Metadata RAG) e instrucciones de Meta-Tooling
@@ -634,6 +635,7 @@ Reglas adicionales de Administrador:
                   "categoria": "TEXT - Categoría comercial ('Abarrotes', 'Confites', 'Limpieza', 'Verdulería', 'Bebidas')",
                   "tipo_bulto": "TEXT - Clasificación de peso/volumen ('Pesado', 'Estándar')",
                   "sku": "TEXT - Código único de producto (ej. 'LD-AB123')",
+                  "url_imagen_retail": "TEXT - URL de la imagen del producto. Si no tiene una imagen asociada, se almacena por defecto la URL de placeholder: 'https://cdn.pesco.cl/wp-content/uploads/2021/03/producto_sin_imagen.png'",
                   "disponible": "BOOLEAN - Si está disponible para la venta (true/false)",
                   "activo": "BOOLEAN - Borrado lógico (true = producto activo en catálogo, false = producto eliminado)"
                 }
@@ -1002,7 +1004,7 @@ ${urlImagenPublicaTemp}
           },
           {
             name: "crear_producto",
-            description: "Agrega un nuevo producto al catálogo de LukeDelivery. Usa esta función cuando el administrador pida registrar o agregar un nuevo producto indicando sus detalles. El bot puede preguntar por la URL de la imagen del producto, pero si no se provee, no envíes este parámetro.",
+            description: "Agrega un nuevo producto al catálogo de LukeDelivery. Usa esta función cuando el administrador pida registrar o agregar un nuevo producto indicando sus detalles. El sistema cuenta con una imagen placeholder por defecto, por lo que NO debes solicitar ni exigir una imagen o URL de foto al administrador si no la provee voluntariamente.",
             parameters: {
               type: "OBJECT",
               properties: {
