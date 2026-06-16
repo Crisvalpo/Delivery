@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Head from "next/head";
 import { Atkinson_Hyperlegible_Next } from "next/font/google";
 import {
@@ -19,6 +19,9 @@ import {
   Clock,
   ArrowRight,
   MessageCircle,
+  X,
+  Camera,
+  CheckCircle,
 } from "lucide-react";
 
 const atkinson = Atkinson_Hyperlegible_Next({
@@ -55,6 +58,12 @@ export default function RutaPage() {
   const [pinInput, setPinInput] = useState("");
   const [autenticado, setAutenticado] = useState(false);
   const [pinError, setPinError] = useState(false);
+
+  // Estados de trazabilidad de bultos
+  const [scannerActivo, setScannerActivo] = useState(false);
+  const [pedidoEnEscaneo, setPedidoEnEscaneo] = useState(null);
+  const [bultosLocales, setBultosLocales] = useState([]);
+  const html5QrCodeRef = useRef(null);
 
   // Auto-login Single Sign-On
   useEffect(() => {
@@ -121,6 +130,139 @@ export default function RutaPage() {
   useEffect(() => {
     if (autenticado) fetchPedidos();
   }, [autenticado, fetchPedidos]);
+
+  const iniciarScannerBultos = async (pedido) => {
+    setPedidoEnEscaneo(pedido);
+    setBultosLocales(pedido.bultos_despacho || []);
+    setScannerActivo(true);
+
+    if (!window.Html5Qrcode) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://unpkg.com/html5-qrcode";
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    setTimeout(async () => {
+      try {
+        const Lector = window.Html5Qrcode;
+        if (!Lector) throw new Error("Html5Qrcode no se cargó.");
+
+        const html5QrCode = new Lector("reader-bultos");
+        html5QrCodeRef.current = html5QrCode;
+
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 }
+          },
+          async (decodedText) => {
+            await procesarEscaneoBulto(decodedText, pedido);
+          },
+          () => {}
+        );
+      } catch (err) {
+        console.error("Error iniciando lector:", err);
+        mostrarToast("No se pudo acceder a la cámara.", "error");
+        setScannerActivo(false);
+      }
+    }, 300);
+  };
+
+  const detenerScannerBultos = async () => {
+    if (html5QrCodeRef.current) {
+      try {
+        await html5QrCodeRef.current.stop();
+      } catch (err) {
+        console.error("Error al apagar cámara:", err);
+      }
+      html5QrCodeRef.current = null;
+    }
+    setScannerActivo(false);
+    setPedidoEnEscaneo(null);
+    setBultosLocales([]);
+  };
+
+  const procesarEscaneoBulto = async (codigo, pedido) => {
+    const cod = codigo.trim();
+    const bulto = pedido.bultos_despacho?.find(b => b.codigo_bulto === cod);
+
+    if (!bulto) {
+      if (typeof window !== "undefined" && window.navigator.vibrate) {
+        window.navigator.vibrate([100, 50, 100]);
+      }
+      mostrarToast(`⚠️ Error: El bulto '${cod}' no corresponde a este pedido.`, "error");
+      return;
+    }
+
+    if (bulto.estado === "entregado") {
+      mostrarToast("Bulto ya entregado.", "success");
+      return;
+    }
+
+    if (typeof window !== "undefined" && window.navigator.vibrate) {
+      window.navigator.vibrate(100);
+    }
+    
+    mostrarToast(`Escaneando: ${cod}...`, "success");
+
+    try {
+      const res = await fetch("/api/bultos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-secret": ADMIN_SECRET
+        },
+        body: JSON.stringify({
+          accion: "escanear",
+          codigo_bulto: cod
+        })
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        mostrarToast(data.message || "Error al registrar escaneo.", "error");
+        return;
+      }
+
+      // Actualizar UI localmente
+      setBultosLocales(prev => prev.map(b => b.codigo_bulto === cod ? { ...b, estado: "entregado" } : b));
+      
+      // Actualizar en el listado de pedidos principal
+      setPedidos(prev => prev.map(p => {
+        if (p.id === pedido.id) {
+          const bultosAct = p.bultos_despacho?.map(b => b.codigo_bulto === cod ? { ...b, estado: "entregado" } : b) || [];
+          return {
+            ...p,
+            bultos_despacho: bultosAct,
+            estado: data.pedido_completado ? "Entregado" : p.estado
+          };
+        }
+        return p;
+      }));
+
+      if (data.pedido_completado) {
+        mostrarToast("🎉 ¡Pedido completado y entregado!", "success");
+        detenerScannerBultos();
+      } else {
+        mostrarToast(`Bulto validado. Restan ${data.bultos_pendientes} bulto(s).`, "success");
+      }
+    } catch (err) {
+      mostrarToast("Error de red al procesar bulto.", "error");
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (html5QrCodeRef.current) {
+        html5QrCodeRef.current.stop().catch(() => {});
+      }
+    };
+  }, []);
 
   const handleCambiarEstado = async (pedidoId, nuevoEstado) => {
     setActualizando((prev) => ({ ...prev, [pedidoId]: true }));
@@ -444,22 +586,39 @@ export default function RutaPage() {
                             Salir en Ruta
                           </button>
                         )}
-                        <button
-                          onClick={() => handleCambiarEstado(pedido.id, "Entregado")}
-                          disabled={isActualizando}
-                          className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 disabled:opacity-60 ${
-                            isEnRuta
-                              ? "bg-emerald-600 hover:bg-emerald-500 text-white"
-                              : "bg-slate-800 border border-slate-700 text-slate-300 hover:text-white"
-                          }`}
-                        >
-                          {isActualizando ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <CheckCircle2 className="w-4 h-4" />
-                          )}
-                          Marcar Entregado
-                        </button>
+                        {pedido.bultos_despacho && pedido.bultos_despacho.length > 0 ? (
+                          (() => {
+                            const validados = pedido.bultos_despacho.filter(b => b.estado === "entregado").length;
+                            const totalB = pedido.bultos_despacho.length;
+                            return (
+                              <button
+                                onClick={() => iniciarScannerBultos(pedido)}
+                                disabled={isActualizando}
+                                className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 disabled:opacity-60 bg-amber-500 text-slate-950 hover:bg-amber-400`}
+                              >
+                                <Camera className="w-4.5 h-4.5 shrink-0" />
+                                <span>Validar Bultos ({validados}/{totalB})</span>
+                              </button>
+                            );
+                          })()
+                        ) : (
+                          <button
+                            onClick={() => handleCambiarEstado(pedido.id, "Entregado")}
+                            disabled={isActualizando}
+                            className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-black text-sm transition-all active:scale-95 disabled:opacity-60 ${
+                              isEnRuta
+                                ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                                : "bg-slate-800 border border-slate-700 text-slate-300 hover:text-white"
+                            }`}
+                          >
+                            {isActualizando ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-4 h-4" />
+                            )}
+                            Marcar Entregado
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -545,6 +704,78 @@ export default function RutaPage() {
                 month: "short",
               })}
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL ESCANEO BULTOS ===== */}
+      {scannerActivo && pedidoEnEscaneo && (
+        <div className="fixed inset-0 z-[100000] flex flex-col bg-slate-950/95 backdrop-blur-md">
+          {/* Header */}
+          <div className="p-4 border-b border-slate-900 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">Validación de Entrega</span>
+              <h2 className="text-sm font-black text-white">{pedidoEnEscaneo.clientes?.nombre_tienda}</h2>
+            </div>
+            <button
+              onClick={detenerScannerBultos}
+              className="p-2 bg-slate-900 border border-slate-800 text-slate-400 hover:text-white rounded-xl active:scale-95 transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Cámara View */}
+          <div className="flex-1 flex flex-col justify-center items-center p-4 relative animate-fade-in">
+            <div className="w-full max-w-sm aspect-square bg-black border border-slate-800 rounded-2xl overflow-hidden relative shadow-2xl">
+              <div id="reader-bultos" className="w-full h-full"></div>
+              {/* Escáner Reticle */}
+              <div className="absolute inset-8 border-2 border-dashed border-amber-500/40 rounded-xl pointer-events-none flex items-center justify-center">
+                <span className="text-[10px] text-amber-400/80 font-bold bg-slate-950/80 px-2 py-0.5 rounded-full backdrop-blur-sm uppercase">Enfoca el código QR</span>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-500 text-center font-bold uppercase mt-4 tracking-wide max-w-xs animate-pulse">
+              Apunta la cámara al código QR impreso en el bulto
+            </p>
+          </div>
+
+          {/* Listado de Bultos / Progreso */}
+          <div className="bg-slate-900/80 border-t border-slate-900 p-4 pb-8 max-h-[35vh] overflow-y-auto">
+            <div className="max-w-md mx-auto space-y-3">
+              <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                <span>Progreso de bultos</span>
+                <span className="text-amber-400 font-black">
+                  {bultosLocales.filter(b => b.estado === "entregado").length} de {bultosLocales.length} validados
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-2">
+                {bultosLocales.map((b) => {
+                  const entregado = b.estado === "entregado";
+                  return (
+                    <div
+                      key={b.id}
+                      className={`flex justify-between items-center px-4 py-3 rounded-xl border text-xs font-semibold transition ${
+                        entregado
+                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-md shadow-emerald-500/5"
+                          : "bg-slate-950/60 border-slate-800 text-slate-400"
+                      }`}
+                    >
+                      <span className="font-mono tracking-wider">{b.codigo_bulto}</span>
+                      <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1`}>
+                        {entregado ? (
+                          <>
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            <span>Validado</span>
+                          </>
+                        ) : (
+                          <span className="text-slate-600">Pendiente</span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       )}

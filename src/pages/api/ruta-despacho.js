@@ -107,6 +107,12 @@ export default async function handler(req, res) {
               formato_venta,
               tipo_bulto
             )
+          ),
+          bultos_despacho (
+            id,
+            codigo_bulto,
+            estado,
+            entregado_at
           )
         `)
         .in("estado", ["Preparado", "En Ruta", "Entregado"])

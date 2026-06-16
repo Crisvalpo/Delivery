@@ -706,6 +706,38 @@ export default function AdminLukePage() {
   const handleActualizarEstado = async (pedidoId, nuevoEstado) => {
     setActualizandoPedidoId(pedidoId);
     try {
+      if (nuevoEstado === "Preparado") {
+        const cantStr = window.prompt("¿En cuántos bultos/cajas físicas se enviará este pedido?", "1");
+        if (cantStr === null) {
+          setActualizandoPedidoId(null);
+          return; // cancelado por el usuario
+        }
+        const cant = parseInt(cantStr);
+        if (isNaN(cant) || cant <= 0) {
+          alert("Cantidad de bultos inválida. Debe ser un número positivo.");
+          setActualizandoPedidoId(null);
+          return;
+        }
+
+        // Crear bultos en la base de datos
+        const resBultos = await fetch("/api/bultos", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-secret": process.env.NEXT_PUBLIC_ADMIN_SECRET || "",
+          },
+          body: JSON.stringify({
+            accion: "crear",
+            pedido_id: pedidoId,
+            cantidad_bultos: cant,
+          }),
+        });
+        const dataBultos = await resBultos.json();
+        if (!dataBultos.success) {
+          throw new Error(dataBultos.message || "Error al crear bultos");
+        }
+      }
+
       // Si el nuevo estado requiere notificación WA, usamos la API ruta-despacho
       // que actualiza el estado Y envía el mensaje al cliente
       if (nuevoEstado === "En Ruta" || nuevoEstado === "Entregado") {
@@ -732,7 +764,7 @@ export default function AdminLukePage() {
       await fetchClientes();
     } catch (err) {
       console.error("[AdminLuke] Error actualizando estado de pedido:", err);
-      alert("Error al actualizar el estado del pedido.");
+      alert("Error al actualizar el estado del pedido: " + err.message);
     } finally {
       setActualizandoPedidoId(null);
     }
@@ -1601,6 +1633,19 @@ export default function AdminLukePage() {
                             <span>${p.total_pagar.toLocaleString("es-CL")}</span>
                           </div>
                         </div>
+
+                        {/* Trazabilidad de Bultos */}
+                        {(p.estado === "Preparado" || p.estado === "En Ruta" || p.estado === "Entregado") && (
+                          <div className="mt-3.5 pt-3 border-t border-border/50 flex items-center justify-between">
+                            <span className="text-[9px] text-text-dim font-bold uppercase tracking-wider">Trazabilidad de Bultos</span>
+                            <button
+                              onClick={() => window.open(`/admin-etiquetas?pedido_id=${p.id}`, "_blank")}
+                              className="inline-flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500 border border-amber-500/20 hover:border-transparent text-amber-400 hover:text-white font-bold text-[9px] px-3 py-1.5 rounded-lg transition-all duration-200 cursor-pointer"
+                            >
+                              <span>🖨️ Imprimir Etiquetas</span>
+                            </button>
+                          </div>
+                        )}
 
                         {/* Order Management Actions */}
                         <div className="mt-4 pt-3.5 border-t border-border/50">
