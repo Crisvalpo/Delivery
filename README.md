@@ -8,7 +8,7 @@ Este repositorio contiene tanto la aplicación frontend/backend en **Next.js** c
 
 ## 🗺️ Arquitectura del Sistema
 
-El ecosistema corre en un servidor local (`lukeserver` Asus Laptop, 4GB RAM) y consta de 4 pilares:
+El ecosistema corre en un servidor local (`lukeserver` Asus Laptop, 3.7GB RAM) y consta de 4 pilares:
 
 ```mermaid
 graph TD
@@ -94,7 +94,7 @@ Abre el enlace ➡️ Arma su pedido con la UI accesible ➡️ Presiona "Confir
 
 ## 🖥️ Gestión del Servidor y Puertos
 
-Para maximizar el rendimiento del servidor Asus de 4GB de RAM, la infraestructura de producción de este proyecto consta de los siguientes servicios activos:
+Para maximizar el rendimiento del servidor Asus de 3.7GB de RAM (usables), la infraestructura de producción de este proyecto consta de los siguientes servicios activos:
 
 ### 📊 Servicios Activos
 | ID (PM2) | Nombre del Proceso | Puerto | Rol / Descripción |

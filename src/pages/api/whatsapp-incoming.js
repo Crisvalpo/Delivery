@@ -619,6 +619,86 @@ Reglas adicionales de Administrador:
 3. Al crear o actualizar un producto, debes clasificarlo de forma precisa y obligatoria en la categoría comercial más adecuada usando estrictamente una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería' o 'Bebidas'.
 4. Antes de llamar a "crear_producto", revisa siempre la lista de productos actual. Si ya existe un producto con el mismo nombre y formato, NO lo vuelvas a crear; en su lugar, utiliza la herramienta "actualizar_detalles_producto".
 `;
+
+          // Mapa del Mundo (Metadata RAG) e instrucciones de Meta-Tooling
+          const mapaDelMundo = {
+            database_schema: {
+              "public.productos": {
+                descripcion: "Catálogo de productos a la venta en el sistema LukeDelivery.",
+                columnas: {
+                  "id": "UUID (Clave Primaria)",
+                  "nombre": "TEXT - Nombre descriptivo del producto (ej. 'Malla de Papas 25kg')",
+                  "formato_venta": "TEXT - Formato en que se vende (ej. 'Saco 25kg', 'Bolsa 1u')",
+                  "precio": "INTEGER - Precio de venta al público en pesos chilenos (CLP)",
+                  "precio_costo": "INTEGER - Precio de costo mayorista en pesos chilenos (CLP)",
+                  "categoria": "TEXT - Categoría comercial ('Abarrotes', 'Confites', 'Limpieza', 'Verdulería', 'Bebidas')",
+                  "tipo_bulto": "TEXT - Clasificación de peso/volumen ('Pesado', 'Estándar')",
+                  "sku": "TEXT - Código único de producto (ej. 'LD-AB123')",
+                  "disponible": "BOOLEAN - Si está disponible para la venta (true/false)",
+                  "activo": "BOOLEAN - Borrado lógico (true = producto activo en catálogo, false = producto eliminado)"
+                }
+              },
+              "public.clientes": {
+                descripcion: "Clientes registrados (almaceneros) en LukeDelivery.",
+                columnas: {
+                  "id": "UUID (Clave Primaria)",
+                  "nombre_tienda": "TEXT - Nombre del negocio o almacén",
+                  "nombre_contacto": "TEXT - Nombre del dueño o contacto principal",
+                  "whatsapp": "TEXT - Número de WhatsApp con o sin '+' (ej. '+56912345678')",
+                  "whatsapp_lid": "TEXT - Identificador de WhatsApp LID único (opcional)",
+                  "sector": "TEXT - Sector geográfico o barrio en Placilla/Curauma",
+                  "notas_campo": "TEXT - Notas de campo adicionales del cliente",
+                  "latitud": "DOUBLE PRECISION - Latitud de geolocalización",
+                  "longitud": "DOUBLE PRECISION - Longitud de geolocalización",
+                  "prioridad_territorial": "TEXT - Prioridad de despacho ('Alta', 'Media', 'Baja')",
+                  "registro_completo": "BOOLEAN - Si el registro está completo y la ubicación configurada (true/false)"
+                }
+              },
+              "public.pedidos": {
+                descripcion: "Pedidos realizados por los clientes.",
+                columnas: {
+                  "id": "UUID (Clave Primaria)",
+                  "cliente_id": "UUID (Clave Foránea -> public.clientes.id)",
+                  "total_neto": "INTEGER - Suma total de los precios netos de los ítems en CLP",
+                  "flete": "INTEGER - Costo del flete de envío en CLP",
+                  "total_pagar": "INTEGER - Suma de total_neto + flete en CLP",
+                  "total_costo": "INTEGER - Suma del costo mayorista total de los ítems en CLP (para margen)",
+                  "estado": "TEXT - Estado del pedido ('Pendiente', 'Preparado', 'En Ruta', 'Entregado', 'Cancelado')",
+                  "created_at": "TIMESTAMP WITH TIME ZONE - Fecha y hora de creación del pedido"
+                }
+              },
+              "public.items_pedido": {
+                descripcion: "Detalle de los productos individuales incluidos en cada pedido.",
+                columnas: {
+                  "id": "UUID (Clave Primaria)",
+                  "pedido_id": "UUID (Clave Foránea -> public.pedidos.id)",
+                  "producto_id": "UUID (Clave Foránea -> public.productos.id)",
+                  "cantidad": "INTEGER - Cantidad del producto solicitada",
+                  "precio_unitario": "INTEGER - Precio unitario del producto al momento de comprar",
+                  "total_item": "INTEGER - Total de este ítem (cantidad * precio_unitario)",
+                  "estado": "TEXT - Estado de disponibilidad del ítem ('disponible', 'no_disponible')"
+                }
+              }
+            }
+          };
+
+          promptSistema += `
+
+--- MAPA DE LA BASE DE DATOS (WORLD MAP) ---
+Como administrador, tienes la capacidad de crear y ejecutar consultas SQL dinámicas mediante herramientas JavaScript en caliente.
+Usa este mapa de base de datos JSON para estructurar tus consultas sin alucinar campos ni tablas:
+${JSON.stringify(mapaDelMundo, null, 2)}
+
+Directrices de Meta-Tooling (Desarrollo Dinámico de Herramientas):
+1. Eres un desarrollador de tus propias herramientas de datos. Si el administrador te solicita un reporte, listado o cruce de datos personalizado que no exista en tu catálogo actual de herramientas, debes crear una nueva función llamando a "crear_herramienta_dinamica".
+2. Al llamar a "crear_herramienta_dinamica", debes pasar:
+   - "nombre_funcion": Nombre único de la función en snake_case (ej. 'obtener_productos_sin_stock_pesados'). Debe empezar con 'obtener_' o 'consultar_'.
+   - "descripcion": Lo que hace la función y qué datos retorna de forma descriptiva.
+   - "codigo_javascript": Código JS asíncrono compatible con Node.js que realice la consulta a Supabase usando el parámetro 'supabase' (ej: 'const { data, error } = await supabase.from("pedidos").select("id, total_pagar"); if (error) throw error; return data;'). Retorna siempre el resultado de la consulta. No uses variables globales del sistema, solo la base de datos inyectada.
+   - "esquema_json": El objeto parameters que define el schema de Gemini Function Calling (tipo, properties, required). Si no requiere parámetros de entrada, pasa { "type": "OBJECT", "properties": {} }.
+3. Está terminantemente PROHIBIDO inventar campos o tablas.
+4. El sistema registrará y ejecutará tu código de inmediato en el mismo ciclo, y te devolverá el resultado. Redacta la respuesta final al administrador a partir del resultado devuelto.
+`;
         }
 
 
@@ -792,6 +872,23 @@ ${urlImagenPublicaTemp}
           generarYGuardarResumen(supabase, phoneClean, historialTexto, geminiKey, modelName).catch(() => {});
         }
 
+        // --- CARGAR HERRAMIENTAS DINÁMICAS DE SUPABASE ---
+        let dbTools = [];
+        try {
+          const { data: loadedTools, error: loadToolsErr } = await supabase
+            .from("bot_tools_dinamicas")
+            .select("nombre_funcion, descripcion, esquema_json, codigo_javascript");
+          
+          if (loadToolsErr) {
+            console.error("[whatsapp-incoming] Error cargando herramientas dinámicas:", loadToolsErr.message);
+          } else if (loadedTools) {
+            dbTools = loadedTools;
+            console.log(`[whatsapp-incoming] 🛠️ ${dbTools.length} herramientas dinámicas cargadas desde Supabase.`);
+          }
+        } catch (dbToolsEx) {
+          console.error("[whatsapp-incoming] Excepción cargando herramientas dinámicas:", dbToolsEx.message);
+        }
+
         // 3. Validar si el remitente es un trabajador activo y su rol para habilitar herramientas
         // (esAdmin ya fue definido en la sección de clasificación de perfiles)
 
@@ -852,145 +949,185 @@ ${urlImagenPublicaTemp}
           }
         ];
 
+        const adminTools = [
+          {
+            name: "crear_herramienta_dinamica",
+            description: "Crea y registra una nueva herramienta de consulta dinámica cuando el administrador solicite un reporte, listado o cruce de datos personalizado que no exista en el catálogo de herramientas actual. Debes proporcionarle el código JavaScript que realice la consulta a Supabase de manera asíncrona y el esquema JSON de parámetros.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                nombre_funcion: {
+                  type: "STRING",
+                  description: "El nombre único de la función en snake_case (ej. 'obtener_productos_sin_stock_pesados'). Debe comenzar con 'obtener_' o 'consultar_'."
+                },
+                descripcion: {
+                  type: "STRING",
+                  description: "Una descripción clara de lo que hace la función y qué información retorna."
+                },
+                codigo_javascript: {
+                  type: "STRING",
+                  description: "Código JavaScript autónomo (ES6) que realiza la consulta usando el cliente 'supabase' inyectado y retorna una promesa con los datos. Ej: 'const { data, error } = await supabase.from(\"productos\").select(\"nombre, precio\").eq(\"disponible\", false); if (error) throw error; return data;'"
+                },
+                esquema_json: {
+                  type: "OBJECT",
+                  description: "El objeto parameters que define el schema de Gemini Function Calling (tipo, properties, required). Si no requiere parámetros de entrada, pasa { \"type\": \"OBJECT\", \"properties\": {} }."
+                }
+              },
+              required: ["nombre_funcion", "descripcion", "codigo_javascript", "esquema_json"]
+            }
+          },
+          {
+            name: "actualizar_precio_producto",
+            description: "Actualiza el precio de venta y/o el precio de costo de un producto en el catálogo. Usa esta función cuando el administrador indique que el precio (de venta o de costo/mayorista) de un producto cambió, varió o debe ser modificado. Si solo se indica el precio de costo, calcula automáticamente el nuevo precio de venta aplicando el margen configurado.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                nombre_producto: {
+                  type: "STRING",
+                  description: "El nombre aproximado o exacto del producto a modificar (ej. 'Malla de Papas 25kg')"
+                },
+                nuevo_precio: {
+                  type: "INTEGER",
+                  description: "El nuevo precio de VENTA (al público) como número entero en pesos chilenos (opcional). Si no se especifica pero sí se indica nuevo_precio_costo, se calculará automáticamente."
+                },
+                nuevo_precio_costo: {
+                  type: "INTEGER",
+                  description: "El nuevo precio de COSTO (mayorista) como número entero en pesos chilenos (opcional). Si se indica este parámetro y no se indica nuevo_precio, el precio de venta se recalcula automáticamente con el margen configurado."
+                }
+              },
+              required: ["nombre_producto"]
+            }
+          },
+          {
+            name: "crear_producto",
+            description: "Agrega un nuevo producto al catálogo de LukeDelivery. Usa esta función cuando el administrador pida registrar o agregar un nuevo producto indicando sus detalles. El bot puede preguntar por la URL de la imagen del producto, pero si no se provee, no envíes este parámetro.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                nombre: {
+                  type: "STRING",
+                  description: "Nombre del producto (ej. 'Malla de Papas 25kg')"
+                },
+                formato_venta: {
+                  type: "STRING",
+                  description: "El formato de venta (ej. 'Saco 25kg', 'Bolsa 1u')"
+                },
+                precio: {
+                  type: "INTEGER",
+                  description: "El precio de venta al público como entero en pesos (opcional). Solo suministrar si el usuario lo indica explícitamente en el mensaje. Si no se indica, no lo envíes."
+                },
+                precio_costo: {
+                  type: "INTEGER",
+                  description: "El precio de costo del mayorista como entero en pesos (ej. 10000)"
+                },
+                tipo_bulto: {
+                  type: "STRING",
+                  enum: ["Pesado", "Estándar"],
+                  description: "Clasificación por peso/volumen del bulto. Opcional. Usa 'Pesado' si pesa más de 5kg o es muy grande/voluminoso, de lo contrario no la envíes (el sistema la asumirá como 'Estándar')."
+                },
+                categoria: {
+                  type: "STRING",
+                  enum: ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"],
+                  description: "La categoría comercial del producto. Debe ser estrictamente una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería', 'Bebidas'. Es requerida."
+                },
+                sku: {
+                  type: "STRING",
+                  description: "El SKU o código único identificador del producto (opcional). Si no se provee, el sistema lo generará automáticamente."
+                },
+                url_imagen_retail: {
+                  type: "STRING",
+                  description: "La URL directa de la imagen del producto (opcional). Solo suministrar si el usuario la provee explícitamente en el mensaje."
+                }
+              },
+              required: ["nombre", "formato_venta", "precio_costo", "categoria"]
+            }
+          },
+          {
+            name: "cambiar_disponibilidad_producto",
+            description: "Habilita o deshabilita la disponibilidad de un producto en el catálogo. Usa esta función cuando el administrador indique deshabilitar, habilitar, agotar, activar o desactivar la venta de un producto.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                nombre_producto: {
+                  type: "STRING",
+                  description: "El nombre del producto."
+                },
+                disponible: {
+                  type: "BOOLEAN",
+                  description: "Establece true para marcarlo como disponible/activo para la venta, o false para marcarlo como agotado/deshabilitado/inactivo."
+                }
+              },
+              required: ["nombre_producto", "disponible"]
+            }
+          },
+          {
+            name: "eliminar_producto",
+            description: "Realiza un borrado lógico (desactivación) de un producto del catálogo. Usa esta función cuando el administrador pida eliminar o borrar un producto del catálogo.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                nombre_producto: {
+                  type: "STRING",
+                  description: "El nombre del producto a eliminar."
+                }
+              },
+              required: ["nombre_producto"]
+            }
+          },
+          {
+            name: "actualizar_detalles_producto",
+            description: "Actualiza los detalles de un producto en el catálogo (formato de venta, imagen, categoría logística, etc.). Usa esta función cuando el administrador pida cambiar la cantidad por caja, el formato, la imagen o fotos de un producto.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                nombre_producto: {
+                  type: "STRING",
+                  description: "El nombre aproximado o exacto del producto a modificar (ej. 'Chocman')"
+                },
+                nuevo_nombre: {
+                  type: "STRING",
+                  description: "El nuevo nombre para el producto (opcional)."
+                },
+                nuevo_formato_venta: {
+                  type: "STRING",
+                  description: "El nuevo formato de venta o unidades (opcional, ej. 'Caja 32 unidades')"
+                },
+                nueva_url_imagen: {
+                  type: "STRING",
+                  description: "La nueva URL de la imagen del producto (opcional)."
+                },
+                nuevo_tipo_bulto: {
+                  type: "STRING",
+                  enum: ["Pesado", "Estándar"],
+                  description: "El nuevo tipo de bulto o peso del producto (opcional)."
+                },
+                nueva_categoria: {
+                  type: "STRING",
+                  enum: ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"],
+                  description: "La nueva categoría comercial del producto (opcional). Debe ser una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería', 'Bebidas'."
+                }
+              },
+              required: ["nombre_producto"]
+            }
+          }
+        ];
+
+        const dynamicDeclarations = dbTools ? dbTools.map(t => {
+          const parameters = t.esquema_json.parameters || t.esquema_json;
+          return {
+            name: t.nombre_funcion,
+            description: t.descripcion,
+            parameters: parameters
+          };
+        }) : [];
+
         const tools = [
           {
             functionDeclarations: [
               ...basicTools,
               ...(esAdmin ? [
-                {
-                  name: "actualizar_precio_producto",
-                  description: "Actualiza el precio de venta y/o el precio de costo de un producto en el catálogo. Usa esta función cuando el administrador indique que el precio (de venta o de costo/mayorista) de un producto cambió, varió o debe ser modificado. Si solo se indica el precio de costo, calcula automáticamente el nuevo precio de venta aplicando el margen configurado.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: {
-                      nombre_producto: {
-                        type: "STRING",
-                        description: "El nombre aproximado o exacto del producto a modificar (ej. 'Malla de Papas 25kg')"
-                      },
-                      nuevo_precio: {
-                        type: "INTEGER",
-                        description: "El nuevo precio de VENTA (al público) como número entero en pesos chilenos (opcional). Si no se especifica pero sí se indica nuevo_precio_costo, se calculará automáticamente."
-                      },
-                      nuevo_precio_costo: {
-                        type: "INTEGER",
-                        description: "El nuevo precio de COSTO (mayorista) como número entero en pesos chilenos (opcional). Si se indica este parámetro y no se indica nuevo_precio, el precio de venta se recalcula automáticamente con el margen configurado."
-                      }
-                    },
-                    required: ["nombre_producto"]
-                  }
-                },
-                {
-                  name: "crear_producto",
-                  description: "Agrega un nuevo producto al catálogo de LukeDelivery. Usa esta función cuando el administrador pida registrar o agregar un nuevo producto indicando sus detalles. El bot puede preguntar por la URL de la imagen del producto, pero si no se provee, no envíes este parámetro.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: {
-                      nombre: {
-                        type: "STRING",
-                        description: "Nombre del producto (ej. 'Malla de Papas 25kg')"
-                      },
-                      formato_venta: {
-                        type: "STRING",
-                        description: "El formato de venta (ej. 'Saco 25kg', 'Bolsa 1u')"
-                      },
-                      precio: {
-                        type: "INTEGER",
-                        description: "El precio de venta al público como entero en pesos (opcional). Solo suministrar si el usuario lo indica explícitamente en el mensaje. Si no se indica, no lo envíes."
-                      },
-                      precio_costo: {
-                        type: "INTEGER",
-                        description: "El precio de costo del mayorista como entero en pesos (ej. 10000)"
-                      },
-                      tipo_bulto: {
-                        type: "STRING",
-                        enum: ["Pesado", "Estándar"],
-                        description: "Clasificación por peso/volumen del bulto. Opcional. Usa 'Pesado' si pesa más de 5kg o es muy grande/voluminoso, de lo contrario no la envíes (el sistema la asumirá como 'Estándar')."
-                      },
-                      categoria: {
-                        type: "STRING",
-                        enum: ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"],
-                        description: "La categoría comercial del producto. Debe ser estrictamente una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería', 'Bebidas'. Es requerida."
-                      },
-                      sku: {
-                        type: "STRING",
-                        description: "El SKU o código único identificador del producto (opcional). Si no se provee, el sistema lo generará automáticamente."
-                      },
-                      url_imagen_retail: {
-                        type: "STRING",
-                        description: "La URL directa de la imagen del producto (opcional). Solo suministrar si el usuario la provee explícitamente en el mensaje."
-                      }
-                    },
-                    required: ["nombre", "formato_venta", "precio_costo", "categoria"]
-                  }
-                },
-                {
-                  name: "cambiar_disponibilidad_producto",
-                  description: "Habilita o deshabilita la disponibilidad de un producto en el catálogo. Usa esta función cuando el administrador indique deshabilitar, habilitar, agotar, activar o desactivar la venta de un producto.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: {
-                      nombre_producto: {
-                        type: "STRING",
-                        description: "El nombre del producto."
-                      },
-                      disponible: {
-                        type: "BOOLEAN",
-                        description: "Establece true para marcarlo como disponible/activo para la venta, o false para marcarlo como agotado/deshabilitado/inactivo."
-                      }
-                    },
-                    required: ["nombre_producto", "disponible"]
-                  }
-                },
-                {
-                  name: "eliminar_producto",
-                  description: "Realiza un borrado lógico (desactivación) de un producto del catálogo. Usa esta función cuando el administrador pida eliminar o borrar un producto del catálogo.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: {
-                      nombre_producto: {
-                        type: "STRING",
-                        description: "El nombre del producto a eliminar."
-                      }
-                    },
-                    required: ["nombre_producto"]
-                  }
-                },
-                {
-                  name: "actualizar_detalles_producto",
-                  description: "Actualiza los detalles de un producto en el catálogo (formato de venta, imagen, categoría logística, etc.). Usa esta función cuando el administrador pida cambiar la cantidad por caja, el formato, la imagen o fotos de un producto.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: {
-                      nombre_producto: {
-                        type: "STRING",
-                        description: "El nombre aproximado o exacto del producto a modificar (ej. 'Chocman')"
-                      },
-                      nuevo_nombre: {
-                        type: "STRING",
-                        description: "El nuevo nombre para el producto (opcional)."
-                      },
-                      nuevo_formato_venta: {
-                        type: "STRING",
-                        description: "El nuevo formato de venta o unidades (opcional, ej. 'Caja 32 unidades')"
-                      },
-                      nueva_url_imagen: {
-                        type: "STRING",
-                        description: "La nueva URL de la imagen del producto (opcional)."
-                      },
-                      nuevo_tipo_bulto: {
-                        type: "STRING",
-                        enum: ["Pesado", "Estándar"],
-                        description: "El nuevo tipo de bulto o peso del producto (opcional)."
-                      },
-                      nueva_categoria: {
-                        type: "STRING",
-                        enum: ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"],
-                        description: "La nueva categoría comercial del producto (opcional). Debe ser una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería', 'Bebidas'."
-                      }
-                    },
-                    required: ["nombre_producto"]
-                  }
-                }
+                ...adminTools,
+                ...dynamicDeclarations
               ] : [])
             ]
           }
@@ -1471,6 +1608,58 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                       : `Éxito: Los detalles del producto que coincide con "${nombre_producto}" se han actualizado correctamente en Supabase. Campos modificados: ${Object.keys(updates).join(", ")}.`;
                   }
                 }
+                else if (name === "crear_herramienta_dinamica") {
+                  const { nombre_funcion, descripcion, codigo_javascript, esquema_json } = args;
+                  console.log(`[whatsapp-incoming] 🛠️ Intentando registrar nueva herramienta dinámica: ${nombre_funcion}`);
+
+                  // 1. Guardar en base de datos (UPSERT por si se actualiza)
+                  const { error: insertErr } = await supabase
+                    .from("bot_tools_dinamicas")
+                    .upsert([{
+                      nombre_funcion,
+                      descripcion,
+                      codigo_javascript,
+                      esquema_json
+                    }], { onConflict: "nombre_funcion" });
+
+                  if (insertErr) {
+                    console.error("[whatsapp-incoming] Error registrando herramienta dinámica:", insertErr.message);
+                    dbResult = `Error al registrar la herramienta dinámica: ${insertErr.message}`;
+                  } else {
+                    console.log(`[whatsapp-incoming] ✅ Herramienta dinámica '${nombre_funcion}' registrada en Supabase.`);
+                    // 2. Ejecutar inmediatamente en caliente para retornar datos en esta misma interacción
+                    try {
+                      console.log(`[whatsapp-incoming] ⚡ Ejecutando en caliente la nueva herramienta: ${nombre_funcion}`);
+                      const fn = new Function('supabase', 'args', `
+                        return (async () => {
+                          ${codigo_javascript}
+                        })();
+                      `);
+                      const res = await fn(supabase, {});
+                      dbResult = `Éxito: La herramienta '${nombre_funcion}' fue registrada y ejecutada en caliente correctamente. Datos devueltos: ${JSON.stringify(res)}`;
+                    } catch (execErr) {
+                      console.error(`[whatsapp-incoming] Error de ejecución en caliente para '${nombre_funcion}':`, execErr);
+                      dbResult = `Éxito: La herramienta '${nombre_funcion}' se registró correctamente, pero falló al ejecutarse en caliente: ${execErr.message || execErr}`;
+                    }
+                  }
+                }
+                else if (dbTools && dbTools.some(t => t.nombre_funcion === name)) {
+                  const targetTool = dbTools.find(t => t.nombre_funcion === name);
+                  console.log(`[whatsapp-incoming] ⚡ Ejecutando herramienta dinámica existente: ${name} con args:`, args);
+
+                  try {
+                    const fn = new Function('supabase', 'args', `
+                      return (async () => {
+                        ${targetTool.codigo_javascript}
+                      })();
+                    `);
+                    const res = await fn(supabase, args);
+                    dbResult = JSON.stringify(res);
+                  } catch (execErr) {
+                    console.error(`[whatsapp-incoming] Error de ejecución de herramienta dinámica '${name}':`, execErr);
+                    dbResult = `Error al ejecutar la herramienta dinámica '${name}': ${execErr.message || execErr}`;
+                  }
+                }
               } catch (dbErr) {
                 console.error("[whatsapp-incoming] Error en ejecución de DB para functionCall:", dbErr.message);
                 dbResult = `Error de base de datos interno: ${dbErr.message}`;
@@ -1633,20 +1822,24 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
     const destinatario = jid || `${phoneClean}@s.whatsapp.net`;
     console.log(`[whatsapp-incoming] Enviando respuesta a ${destinatario} (${audioBase64ParaEnviar ? 'Nota de voz' : 'Texto'})`);
 
-    const sendRes = await fetch("http://localhost:3015/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        to: destinatario,
-        text: audioBase64ParaEnviar ? "" : responseText,
-        audioBase64: audioBase64ParaEnviar
-      }),
-    });
+    try {
+      const sendRes = await fetch("http://localhost:3015/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: destinatario,
+          text: audioBase64ParaEnviar ? "" : responseText,
+          audioBase64: audioBase64ParaEnviar
+        }),
+      });
 
-    if (!sendRes.ok) {
-      console.error("[whatsapp-incoming] Error enviando mensaje a través del puente:", sendRes.status);
+      if (!sendRes.ok) {
+        console.error("[whatsapp-incoming] Error enviando mensaje a través del puente:", sendRes.status);
+      }
+    } catch (sendErr) {
+      console.error("[whatsapp-incoming] Error de conexión con el puente de WhatsApp:", sendErr.message);
     }
 
     return res.status(200).json({ success: true, responseText });
