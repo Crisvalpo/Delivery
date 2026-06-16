@@ -87,8 +87,13 @@ export default function AdminLukePage() {
     url_imagen_retail: "",
     disponible: true,
     categoria: "Abarrotes",
-    sku: ""
+    sku: "",
+    stock: 0,
+    control_stock: true,
+    codigo_barras: ""
   });
+  const [scannerActivo, setScannerActivo] = useState(false);
+  const html5QrCodeRef = useRef(null);
   const [clickCoords, setClickCoords] = useState(null);
   const [saving, setSaving] = useState(false);
   const [modoEdicion, setModoEdicion] = useState(false);
@@ -785,7 +790,10 @@ export default function AdminLukePage() {
         url_imagen_retail: producto.url_imagen_retail || "",
         disponible: producto.disponible,
         categoria: producto.categoria || "Abarrotes",
-        sku: producto.sku || ""
+        sku: producto.sku || "",
+        stock: producto.stock || 0,
+        control_stock: producto.control_stock !== false,
+        codigo_barras: producto.codigo_barras || ""
       });
     } else {
       setEditingProducto(null);
@@ -798,7 +806,10 @@ export default function AdminLukePage() {
         url_imagen_retail: "",
         disponible: true,
         categoria: "Abarrotes",
-        sku: ""
+        sku: "",
+        stock: 0,
+        control_stock: true,
+        codigo_barras: ""
       });
     }
     setShowProductForm(true);
@@ -822,7 +833,10 @@ export default function AdminLukePage() {
         url_imagen_retail: productForm.url_imagen_retail.trim() || null,
         disponible: productForm.disponible,
         categoria: productForm.categoria,
-        sku: productForm.sku.trim() || "LD-" + Math.random().toString(36).substring(2, 7).toUpperCase()
+        sku: productForm.sku.trim() || "LD-" + Math.random().toString(36).substring(2, 7).toUpperCase(),
+        stock: parseInt(productForm.stock) || 0,
+        control_stock: productForm.control_stock,
+        codigo_barras: productForm.codigo_barras.trim() || null
       };
 
       let idParaActualizar = null;
@@ -864,27 +878,59 @@ export default function AdminLukePage() {
       if (editingProducto || idParaActualizar) {
         // Actualizar
         const targetId = editingProducto ? editingProducto.id : idParaActualizar;
+        
+        // Obtener stock viejo para auditar diferencia
+        const { data: prodViejo } = await supabase
+          .from("productos")
+          .select("stock")
+          .eq("id", targetId)
+          .maybeSingle();
+
         const { error } = await supabase
           .from("productos")
           .update({
             ...payload,
             activo: true, // Reactivar si estaba inactivo
-            disponible: true
+            disponible: payload.stock > 0 || !payload.control_stock
           })
           .eq("id", targetId);
 
         if (error) throw error;
+
+        if (prodViejo) {
+          const diff = payload.stock - (prodViejo.stock || 0);
+          if (diff !== 0) {
+            await supabase.from("movimientos_stock").insert([{
+              producto_id: targetId,
+              cantidad: diff,
+              tipo_movimiento: "ajuste_inventario",
+              referencia_id: "ajuste_web_admin",
+              usuario_creador: "web_admin"
+            }]);
+          }
+        }
 
         if (idParaActualizar) {
           alert(`El producto "${nombreIngresado}" (${formatoIngresado}) o SKU "${skuIngresado || ''}" ya existía en el catálogo. Se actualizó el producto existente en lugar de crear uno nuevo.`);
         }
       } else {
         // Insertar nuevo
-        const { error } = await supabase
+        const { data: prodsInsertados, error } = await supabase
           .from("productos")
-          .insert(payload);
+          .insert(payload)
+          .select();
 
         if (error) throw error;
+
+        if (prodsInsertados && prodsInsertados.length > 0 && payload.stock > 0) {
+          await supabase.from("movimientos_stock").insert([{
+            producto_id: prodsInsertados[0].id,
+            cantidad: payload.stock,
+            tipo_movimiento: "ingreso_manual",
+            referencia_id: "creacion_web_admin",
+            usuario_creador: "web_admin"
+          }]);
+        }
       }
 
       setShowProductForm(false);
@@ -896,6 +942,67 @@ export default function AdminLukePage() {
       setSaving(false);
     }
   };
+
+  // --- Funciones para Lector de Código de Barras (Html5Qrcode) ---
+  const iniciarScanner = async () => {
+    setScannerActivo(true);
+    
+    // Cargar script dinámicamente si no existe
+    if (!window.Html5Qrcode) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://unpkg.com/html5-qrcode";
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    setTimeout(async () => {
+      try {
+        const Lector = window.Html5Qrcode;
+        if (!Lector) throw new Error("Html5Qrcode no se cargó correctamente.");
+        
+        const html5QrCode = new Lector("reader-prod");
+        html5QrCodeRef.current = html5QrCode;
+        
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 260, height: 140 }
+          },
+          (decodedText) => {
+            setProductForm(prev => ({ ...prev, codigo_barras: decodedText }));
+            detenerScanner();
+          },
+          () => {}
+        );
+      } catch (err) {
+        console.error("Error iniciando lector por cámara:", err);
+        alert("Permiso de cámara denegado o no disponible.");
+        setScannerActivo(false);
+      }
+    }, 300);
+  };
+
+  const detenerScanner = async () => {
+    if (html5QrCodeRef.current) {
+      try {
+        await html5QrCodeRef.current.stop();
+      } catch (err) {
+        console.error("Error al detener cámara:", err);
+      }
+      html5QrCodeRef.current = null;
+    }
+    setScannerActivo(false);
+  };
+
+  useEffect(() => {
+    if (!showProductForm) {
+      detenerScanner();
+    }
+  }, [showProductForm]);
 
   // --- Guardar nuevo cliente ---
   const handleGuardar = async () => {
@@ -2093,6 +2200,73 @@ export default function AdminLukePage() {
                   placeholder="https://..."
                   className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
                 />
+              </div>
+
+              {/* Stock e Inventario */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                    Stock Inicial / Actual
+                  </label>
+                  <input
+                    type="number"
+                    value={productForm.stock}
+                    onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })}
+                    placeholder="0"
+                    className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
+                  />
+                </div>
+                <div className="flex flex-col justify-end">
+                  <div className="flex items-center justify-between bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 h-[38px]">
+                    <span className="text-[10px] font-semibold text-text-dim uppercase">Controlar Stock</span>
+                    <button
+                      onClick={() => setProductForm({ ...productForm, control_stock: !productForm.control_stock })}
+                      type="button"
+                      className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        productForm.control_stock ? "bg-brand" : "bg-bg-app border-border"
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          productForm.control_stock ? "translate-x-3" : "translate-x-0"
+                         }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Código de Barras y Lector */}
+              <div>
+                <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                  Código de Barras (Opcional)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={productForm.codigo_barras}
+                    onChange={(e) => setProductForm({ ...productForm, codigo_barras: e.target.value })}
+                    placeholder="Ej: 7801234567890"
+                    className="flex-1 bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
+                  />
+                  <button
+                    onClick={scannerActivo ? detenerScanner : iniciarScanner}
+                    type="button"
+                    className={`px-3 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
+                      scannerActivo
+                        ? "bg-red-500/10 hover:bg-red-500/20 text-red-500 border-red-500/20"
+                        : "bg-brand/10 hover:bg-brand/20 text-brand border-brand/20"
+                    }`}
+                  >
+                    {scannerActivo ? "Apagar" : "📷 Escanear"}
+                  </button>
+                </div>
+                {scannerActivo && (
+                  <div className="mt-2.5 border border-border rounded-xl overflow-hidden bg-black relative">
+                    <div id="reader-prod" className="w-full"></div>
+                    <p className="text-[10px] text-center text-text-dim py-1">Apunta la cámara trasera al código de barras</p>
+                  </div>
+                )}
               </div>
 
               {/* Disponibilidad */}

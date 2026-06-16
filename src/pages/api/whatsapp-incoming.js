@@ -497,6 +497,94 @@ export default async function handler(req, res) {
         }
       }
 
+      // Intercepción rápida para códigos de barra (8 a 14 dígitos) o SKUs (patrón LD-XXXXX)
+      const esCodigoBarras = /^\d{8,14}$/.test(msgLower);
+      const esPatronSku = /^LD-[A-Z0-9]{3,7}$/i.test(msgLower);
+
+      if (esCodigoBarras || esPatronSku) {
+        console.log(`[whatsapp-incoming] 🔍 Detectado posible código de barras o SKU: ${message}`);
+        
+        // Buscar en Supabase
+        const query = supabase
+          .from("productos")
+          .select("*")
+          .eq("activo", true);
+          
+        if (esCodigoBarras) {
+          query.eq("codigo_barras", message.trim());
+        } else {
+          query.ilike("sku", message.trim());
+        }
+        
+        const { data: prodEncontrado, error: errProd } = await query.maybeSingle();
+        
+        if (errProd) {
+          console.error("[whatsapp-incoming] Error buscando producto por código/SKU:", errProd.message);
+        }
+        
+        if (prodEncontrado) {
+          let txtInfo = "";
+          const esUsuarioInterno = esTrabajador || esAdmin;
+          
+          if (esUsuarioInterno) {
+            const margenCalculado = prodEncontrado.precio_costo > 0
+              ? Math.round(((prodEncontrado.precio - prodEncontrado.precio_costo) / prodEncontrado.precio_costo) * 100)
+              : 0;
+              
+            txtInfo = `📦 *FICHA DE PRODUCTO (Interno)*
+*Nombre:* ${prodEncontrado.nombre}
+*Formato:* ${prodEncontrado.formato_venta}
+*SKU:* ${prodEncontrado.sku || "N/A"}
+*Código de Barras:* ${prodEncontrado.codigo_barras || "No registrado"}
+*Categoría:* ${prodEncontrado.categoria}
+*Bulto:* ${prodEncontrado.tipo_bulto || "Estándar"}
+
+💰 *Precios:*
+*Costo:* $${prodEncontrado.precio_costo.toLocaleString("es-CL")}
+*Venta:* $${prodEncontrado.precio.toLocaleString("es-CL")}
+*Margen:* ${margenCalculado}%
+
+📊 *Inventario:*
+*Stock:* ${prodEncontrado.stock ?? 0} unidades
+*Control Stock:* ${prodEncontrado.control_stock ? "Sí" : "No"}
+*Estado:* ${prodEncontrado.disponible ? "🟢 Disponible" : "🔴 Agotado / Inactivo"}`;
+          } else {
+            // Cliente común
+            txtInfo = `📦 *${prodEncontrado.nombre}* (${prodEncontrado.formato_venta})
+*Precio:* $${prodEncontrado.precio.toLocaleString("es-CL")}
+*Estado:* ${prodEncontrado.disponible ? "🟢 Disponible para pedido" : "🔴 Temporalmente agotado"}
+*SKU:* ${prodEncontrado.sku || "N/A"}`;
+          }
+          
+          responseText = txtInfo;
+          
+          // Registrar respuesta en el chat de Supabase
+          try {
+            await supabase
+              .from("mensajes_chat")
+              .insert([{
+                whatsapp: phoneClean,
+                remitente: "asistente",
+                contenido: responseText
+              }]);
+          } catch (histErr) {
+            console.error("[whatsapp-incoming] Error guardando respuesta de código de barras en historial:", histErr.message);
+          }
+          
+          // Enviar a WhatsApp
+          const destinatario = jid || `${phoneClean}@s.whatsapp.net`;
+          await fetch(`${bridgeUrl}/send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ to: destinatario, text: responseText })
+          }).catch(err => console.error("[whatsapp-incoming] Error enviando respuesta de código de barras:", err.message));
+          
+          return res.status(200).json({ success: true, responseText });
+        } else {
+          console.log(`[whatsapp-incoming] Producto con código/SKU ${message} no encontrado en catálogo.`);
+        }
+      }
+
       const geminiKey = process.env.GEMINI_API_KEY;
 
       if (!geminiKey) {
@@ -619,6 +707,7 @@ Reglas adicionales de Administrador:
 3. Al crear o actualizar un producto, debes clasificarlo de forma precisa y obligatoria en la categoría comercial más adecuada usando estrictamente una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería' o 'Bebidas'.
 4. Antes de llamar a "crear_producto", revisa siempre la lista de productos actual. Si ya existe un producto con el mismo nombre y formato, NO lo vuelvas a crear; en su lugar, utiliza la herramienta "actualizar_detalles_producto".
 5. Al crear un nuevo producto con "crear_producto", NO solicites fotos ni imágenes al administrador si no las proporciona voluntariamente. El sistema tiene una imagen placeholder por defecto, por lo que simplemente omite el parámetro "url_imagen_retail".
+6. Si el administrador pide asociar, vincular o registrar un código de barras a un producto existente (ej. "asociar código 7800000000000 al Chocman"), llama inmediatamente a "actualizar_detalles_producto" con el parámetro "nuevo_codigo_barras".
 `;
 
           // Mapa del Mundo (Metadata RAG) e instrucciones de Meta-Tooling
