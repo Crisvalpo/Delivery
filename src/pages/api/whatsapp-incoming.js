@@ -636,8 +636,23 @@ Reglas adicionales de Administrador:
                   "tipo_bulto": "TEXT - Clasificación de peso/volumen ('Pesado', 'Estándar')",
                   "sku": "TEXT - Código único de producto (ej. 'LD-AB123')",
                   "url_imagen_retail": "TEXT - URL de la imagen del producto. Si no tiene una imagen asociada, se almacena por defecto la URL de placeholder: 'https://cdn.pesco.cl/wp-content/uploads/2021/03/producto_sin_imagen.png'",
+                  "stock": "INTEGER - Cantidad actual de unidades en inventario (por defecto 0)",
+                  "control_stock": "BOOLEAN - Si requiere control de inventario (true = descuenta stock y oculta al llegar a 0, false = stock ilimitado)",
+                  "codigo_barras": "TEXT - Código de barras comercial escaneado (EAN-13, etc.)",
                   "disponible": "BOOLEAN - Si está disponible para la venta (true/false)",
                   "activo": "BOOLEAN - Borrado lógico (true = producto activo en catálogo, false = producto eliminado)"
+                }
+              },
+              "public.movimientos_stock": {
+                descripcion: "Registro de auditoría de movimientos de stock (entradas y salidas).",
+                columnas: {
+                  "id": "UUID (Clave Primaria)",
+                  "producto_id": "UUID (Clave Foránea a productos)",
+                  "cantidad": "INTEGER - Cantidad del movimiento (positivo para ingresos, negativo para ventas o pérdidas)",
+                  "tipo_movimiento": "TEXT - Tipo de movimiento ('venta', 'ingreso_manual', 'ajuste_inventario', 'devolucion')",
+                  "referencia_id": "TEXT - ID del pedido u otra referencia de origen",
+                  "usuario_creador": "TEXT - WhatsApp o ID del usuario que realizó la acción",
+                  "created_at": "TIMESTAMP - Fecha del movimiento"
                 }
               },
               "public.clientes": {
@@ -1041,6 +1056,14 @@ ${urlImagenPublicaTemp}
                 url_imagen_retail: {
                   type: "STRING",
                   description: "La URL directa de la imagen del producto (opcional). Solo suministrar si el usuario la provee explícitamente en el mensaje."
+                },
+                stock: {
+                  type: "INTEGER",
+                  description: "El stock inicial del producto en inventario (opcional). Por defecto es 0."
+                },
+                codigo_barras: {
+                  type: "STRING",
+                  description: "El código de barras físico del producto (opcional). Suministrar si el usuario lo dicta o escanea."
                 }
               },
               required: ["nombre", "formato_venta", "precio_costo", "categoria"]
@@ -1109,6 +1132,14 @@ ${urlImagenPublicaTemp}
                   type: "STRING",
                   enum: ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"],
                   description: "La nueva categoría comercial del producto (opcional). Debe ser una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería', 'Bebidas'."
+                },
+                nuevo_stock: {
+                  type: "INTEGER",
+                  description: "El nuevo nivel de stock físico para el producto (opcional)."
+                },
+                nuevo_codigo_barras: {
+                  type: "STRING",
+                  description: "El nuevo código de barras comercial para el producto (opcional)."
                 }
               },
               required: ["nombre_producto"]
@@ -1454,7 +1485,7 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                   }
                 } 
                 else if (name === "crear_producto") {
-                  const { nombre, formato_venta, precio, precio_costo, tipo_bulto, url_imagen_retail, categoria, sku } = args;
+                  const { nombre, formato_venta, precio, precio_costo, tipo_bulto, url_imagen_retail, categoria, sku, stock, codigo_barras } = args;
                   
                   let precioVentaFinal = precio;
                   let margenAplicado = null;
@@ -1531,6 +1562,8 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                     if (categoria) updates.categoria = categoria;
                     if (cleanSku) updates.sku = cleanSku;
                     if (url_imagen_retail && url_imagen_retail.trim()) updates.url_imagen_retail = finalImgUrl;
+                    if (stock !== undefined) updates.stock = stock;
+                    if (codigo_barras !== undefined) updates.codigo_barras = codigo_barras;
 
                     const { error: updateError } = await supabase
                       .from("productos")
@@ -1540,29 +1573,55 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                     if (updateError) {
                       dbResult = `Error al actualizar producto existente: ${updateError.message}`;
                     } else {
+                      if (stock !== undefined) {
+                        const diff = stock - (productoExistente.stock || 0);
+                        if (diff !== 0) {
+                          await supabase.from("movimientos_stock").insert([{
+                            producto_id: productoExistente.id,
+                            cantidad: diff,
+                            tipo_movimiento: "ajuste_inventario",
+                            referencia_id: "actualizacion_producto",
+                            usuario_creador: phoneClean
+                          }]);
+                        }
+                      }
                       dbResult = `Éxito: El producto "${cleanNombre}" (${cleanFormato}) ya existía en el catálogo (SKU: ${productoExistente.sku || cleanSku || "N/A"}) y fue actualizado automáticamente. (Costo: $${precio_costo.toLocaleString("es-CL")}, Venta: $${precioVentaFinal.toLocaleString("es-CL")}${margenAplicado !== null ? ` con margen del ${margenAplicado}%` : ""}).`;
                     }
                   } else {
                     // No existe en la base de datos, procedemos a insertar
                     const skuParaInsertar = cleanSku || ("LD-" + Math.random().toString(36).substring(2, 7).toUpperCase());
-                    const { error: insertError } = await supabase
+                    const insertObj = {
+                      nombre: cleanNombre,
+                      formato_venta: cleanFormato,
+                      precio: precioVentaFinal,
+                      precio_costo,
+                      sku: skuParaInsertar,
+                      categoria: categoria || "Abarrotes",
+                      tipo_bulto: finalBulto,
+                      url_imagen_retail: finalImgUrl,
+                      disponible: true,
+                      activo: true
+                    };
+                    if (stock !== undefined) insertObj.stock = stock;
+                    if (codigo_barras !== undefined) insertObj.codigo_barras = codigo_barras;
+
+                    const { data: insertedData, error: insertError } = await supabase
                       .from("productos")
-                      .insert([{
-                        nombre: cleanNombre,
-                        formato_venta: cleanFormato,
-                        precio: precioVentaFinal,
-                        precio_costo,
-                        sku: skuParaInsertar,
-                        categoria: categoria || "Abarrotes",
-                        tipo_bulto: finalBulto,
-                        url_imagen_retail: finalImgUrl,
-                        disponible: true,
-                        activo: true
-                      }]);
+                      .insert([insertObj])
+                      .select();
 
                     if (insertError) {
                       dbResult = `Error al crear producto: ${insertError.message}`;
                     } else {
+                      if (insertedData && insertedData.length > 0 && stock !== undefined && stock !== 0) {
+                        await supabase.from("movimientos_stock").insert([{
+                          producto_id: insertedData[0].id,
+                          cantidad: stock,
+                          tipo_movimiento: "ingreso_manual",
+                          referencia_id: "creacion_producto",
+                          usuario_creador: phoneClean
+                        }]);
+                      }
                       dbResult = `Éxito: El producto "${cleanNombre}" (${cleanFormato}) ha sido creado en el catálogo con SKU: ${skuParaInsertar}. Costo: $${precio_costo.toLocaleString("es-CL")}, Venta: $${precioVentaFinal.toLocaleString("es-CL")}${margenAplicado !== null ? ` (con margen del ${margenAplicado}% calculado)` : ""}.`;
                     }
                   }
@@ -1590,7 +1649,7 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                     : `Éxito: El producto que coincide con "${nombre_producto}" ha sido desactivado del catálogo con éxito.`;
                 }
                 else if (name === "actualizar_detalles_producto") {
-                  const { nombre_producto, nuevo_nombre, nuevo_formato_venta, nueva_url_imagen, nuevo_tipo_bulto, nueva_categoria } = args;
+                  const { nombre_producto, nuevo_nombre, nuevo_formato_venta, nueva_url_imagen, nuevo_tipo_bulto, nueva_categoria, nuevo_stock, nuevo_codigo_barras } = args;
                   
                   const updates = {};
                   if (nuevo_nombre !== undefined) updates.nombre = nuevo_nombre;
@@ -1598,18 +1657,46 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                   if (nueva_url_imagen !== undefined) updates.url_imagen_retail = nueva_url_imagen;
                   if (nuevo_tipo_bulto !== undefined) updates.tipo_bulto = nuevo_tipo_bulto;
                   if (nueva_categoria !== undefined) updates.categoria = nueva_categoria;
+                  if (nuevo_stock !== undefined) updates.stock = nuevo_stock;
+                  if (nuevo_codigo_barras !== undefined) updates.codigo_barras = nuevo_codigo_barras;
 
                   if (Object.keys(updates).length === 0) {
                     dbResult = "Error: No se especificaron campos válidos para actualizar.";
                   } else {
-                    const { error } = await supabase
+                    // Consultar stock anterior para auditoría si se va a modificar el stock
+                    const { data: prodToUpdate } = await supabase
                       .from("productos")
-                      .update(updates)
-                      .ilike("nombre", `%${nombre_producto}%`);
+                      .select("id, stock")
+                      .ilike("nombre", `%${nombre_producto}%`)
+                      .limit(1)
+                      .maybeSingle();
 
-                    dbResult = error
-                      ? `Error al actualizar detalles: ${error.message}`
-                      : `Éxito: Los detalles del producto que coincide con "${nombre_producto}" se han actualizado correctamente en Supabase. Campos modificados: ${Object.keys(updates).join(", ")}.`;
+                    if (!prodToUpdate) {
+                      dbResult = `Error: No se encontró ningún producto que coincida con "${nombre_producto}" para actualizar.`;
+                    } else {
+                      const { error } = await supabase
+                        .from("productos")
+                        .update(updates)
+                        .eq("id", prodToUpdate.id);
+
+                      if (error) {
+                        dbResult = `Error al actualizar detalles: ${error.message}`;
+                      } else {
+                        if (nuevo_stock !== undefined) {
+                          const diff = nuevo_stock - (prodToUpdate.stock || 0);
+                          if (diff !== 0) {
+                            await supabase.from("movimientos_stock").insert([{
+                              producto_id: prodToUpdate.id,
+                              cantidad: diff,
+                              tipo_movimiento: "ajuste_inventario",
+                              referencia_id: "ajuste_manual",
+                              usuario_creador: phoneClean
+                            }]);
+                          }
+                        }
+                        dbResult = `Éxito: Los detalles del producto que coincide con "${nombre_producto}" se han actualizado correctamente en Supabase. Campos modificados: ${Object.keys(updates).join(", ")}.`;
+                      }
+                    }
                   }
                 }
                 else if (name === "crear_herramienta_dinamica") {
