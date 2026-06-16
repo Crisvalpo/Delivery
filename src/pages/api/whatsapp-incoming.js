@@ -690,7 +690,7 @@ Usa este mapa de base de datos JSON para estructurar tus consultas sin alucinar 
 ${JSON.stringify(mapaDelMundo, null, 2)}
 
 Directrices de Meta-Tooling (Desarrollo Dinámico de Herramientas):
-1. Eres un desarrollador de tus propias herramientas de datos. Si el administrador te solicita un reporte, listado o cruce de datos personalizado que no exista en tu catálogo actual de herramientas, debes crear una nueva función llamando a "crear_herramienta_dinamica".
+1. Eres un desarrollador de tus propias herramientas de datos. Si el administrador te solicita un reporte, listado, cruce de datos, o una búsqueda de información específica de la base de datos (por ejemplo, buscar el SKU de un producto, consultar detalles de un cliente por su nombre o teléfono, consultar pedidos específicos de un usuario, etc.) que no puedas responder con el catálogo reducido en caché provisto arriba (el cual solo contiene nombre, formato y precio de venta de productos disponibles), DEBES crear una nueva herramienta de consulta llamando a "crear_herramienta_dinamica".
 2. Al llamar a "crear_herramienta_dinamica", debes pasar:
    - "nombre_funcion": Nombre único de la función en snake_case (ej. 'obtener_productos_sin_stock_pesados'). Debe empezar con 'obtener_' o 'consultar_'.
    - "descripcion": Lo que hace la función y qué datos retorna de forma descriptiva.
