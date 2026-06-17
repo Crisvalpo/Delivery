@@ -805,7 +805,7 @@ export default function PedidoPage() {
                                 <div className="mt-2.5 space-y-2.5">
                                   {/* Mostrar los precios/tiers del producto si tiene configuración especial */}
                                   {(p.venta_multiplo > 1 || p.unidades_embalaje) && (
-                                    <div className="flex flex-col gap-1 text-[10px] bg-slate-50 border border-slate-100 p-2 rounded-lg text-slate-650">
+                                    <div className="flex flex-col gap-1 text-[10px] bg-slate-50 border border-slate-100 p-2 rounded-lg text-slate-600">
                                       {p.venta_multiplo > 1 && (
                                         <div className="flex justify-between">
                                           <span>Pack ({p.venta_multiplo} unidades):</span>
@@ -1094,7 +1094,7 @@ export default function PedidoPage() {
                   className={`px-4 py-2 border rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     paginaActual === 1
                       ? "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
-                      : "bg-white border-slate-200 text-slate-650 hover:bg-slate-50 hover:text-slate-800"
+                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800"
                   }`}
                 >
                   ← Anterior
@@ -1110,7 +1110,7 @@ export default function PedidoPage() {
                   className={`px-4 py-2 border rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     paginaActual === totalPaginas
                       ? "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
-                      : "bg-white border-slate-200 text-slate-650 hover:bg-slate-50 hover:text-slate-800"
+                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800"
                   }`}
                 >
                   Siguiente →
@@ -1297,7 +1297,7 @@ export default function PedidoPage() {
               <div className="flex justify-between items-center bg-slate-50 border border-slate-150 p-4 rounded-2xl">
                 <div>
                   <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">Formato</span>
-                  <span className="text-sm font-extrabold text-slate-850">{productoVisor.formato_venta}</span>
+                  <span className="text-sm font-extrabold text-slate-800">{productoVisor.formato_venta}</span>
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">Precio Unitario</span>
@@ -1311,7 +1311,7 @@ export default function PedidoPage() {
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
                     Detalles del Producto
                   </span>
-                  <p className="text-xs text-slate-650 leading-relaxed font-medium bg-slate-50 border border-slate-100 p-4 rounded-2xl whitespace-pre-line">
+                  <p className="text-xs text-slate-700 leading-relaxed font-medium bg-slate-50 border border-slate-100 p-4 rounded-2xl whitespace-pre-line">
                     {productoVisor.descripcion}
                   </p>
                 </div>
