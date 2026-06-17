@@ -73,6 +73,16 @@ function calcularPrecioTotalItem(Q, p) {
   return totalCajas + totalPacks + totalUnidades;
 }
 
+const getYoutubeEmbedUrl = (url) => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  if (match && match[2].length === 11) {
+    return `https://www.youtube.com/embed/${match[2]}?rel=0`;
+  }
+  return null;
+};
+
 
 export default function PedidoPage() {
   const router = useRouter();
@@ -92,6 +102,7 @@ export default function PedidoPage() {
   const [busqueda, setBusqueda] = useState("");
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("Todas");
   const [paginaActual, setPaginaActual] = useState(1);
+  const [productoVisor, setProductoVisor] = useState(null);
   const PRODUCTOS_POR_PAGINA = 20;
 
   // Reiniciar la página al filtrar o cambiar categoría
@@ -744,7 +755,11 @@ export default function PedidoPage() {
                               }`}
                             >
                               {/* Imagen */}
-                              <div className="relative w-[72px] h-[72px] rounded-xl overflow-hidden shrink-0 bg-gray-50 border border-gray-100 flex items-center justify-center">
+                              <div
+                                onClick={() => setProductoVisor(p)}
+                                className="relative w-[72px] h-[72px] rounded-xl overflow-hidden shrink-0 bg-gray-50 border border-gray-100 flex items-center justify-center cursor-pointer hover:opacity-90 active:scale-95 transition-all"
+                                title="Click para ver más detalles y video"
+                              >
                                 {p.url_imagen_retail ? (
                                   <img
                                     src={p.url_imagen_retail}
@@ -1230,6 +1245,104 @@ export default function PedidoPage() {
               className="w-full h-16 bg-brand hover:bg-brand-hover active:scale-95 text-white text-lg font-black rounded-2xl flex items-center justify-center gap-3 transition-all cursor-pointer shadow-lg shadow-brand/25 uppercase tracking-wide"
             >
               Ver Resumen de mi Pedido
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL VISOR DE PRODUCTO (DETALLE + YOUTUBE) ===== */}
+      {productoVisor && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white border-2 border-slate-100 rounded-[32px] p-6 max-w-md w-full shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto relative animate-scale-up">
+            {/* Botón de cierre */}
+            <button
+              onClick={() => setProductoVisor(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 border-0 rounded-full h-8 w-8 flex items-center justify-center font-bold cursor-pointer transition-all"
+            >
+              ✕
+            </button>
+
+            <div className="text-left space-y-4">
+              {/* Categoría y Nombre */}
+              <div>
+                <span className="text-[10px] bg-brand/10 text-brand px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                  {productoVisor.categoria || "Abarrotes"}
+                </span>
+                <h2 className="text-xl font-black text-slate-800 mt-2 leading-tight">
+                  {productoVisor.nombre}
+                </h2>
+                {productoVisor.sku && (
+                  <span className="text-[10px] text-slate-400 font-bold block mt-1">
+                    SKU: {productoVisor.sku}
+                  </span>
+                )}
+              </div>
+
+              {/* Imagen Grande */}
+              <div className="w-full h-64 rounded-2xl overflow-hidden bg-slate-50 border border-slate-100 flex items-center justify-center relative">
+                {productoVisor.url_imagen_retail ? (
+                  <img
+                    src={productoVisor.url_imagen_retail}
+                    alt={productoVisor.nombre}
+                    className="h-full w-full object-contain p-2"
+                  />
+                ) : (
+                  <div className="text-brand font-black text-6xl">
+                    {productoVisor.nombre.charAt(0)}
+                  </div>
+                )}
+              </div>
+
+              {/* Formato y Precio */}
+              <div className="flex justify-between items-center bg-slate-50 border border-slate-150 p-4 rounded-2xl">
+                <div>
+                  <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">Formato</span>
+                  <span className="text-sm font-extrabold text-slate-850">{productoVisor.formato_venta}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">Precio Unitario</span>
+                  <span className="text-lg font-black text-brand">{fmt(productoVisor.precio)}</span>
+                </div>
+              </div>
+
+              {/* Descripción Detallada */}
+              {productoVisor.descripcion && (
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
+                    Detalles del Producto
+                  </span>
+                  <p className="text-xs text-slate-650 leading-relaxed font-medium bg-slate-50 border border-slate-100 p-4 rounded-2xl whitespace-pre-line">
+                    {productoVisor.descripcion}
+                  </p>
+                </div>
+              )}
+
+              {/* Video de YouTube Embebido */}
+              {productoVisor.url_video && getYoutubeEmbedUrl(productoVisor.url_video) && (
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
+                    Video Demostrativo
+                  </span>
+                  <div className="relative pt-[56.25%] w-full rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-black">
+                    <iframe
+                      className="absolute top-0 left-0 w-full h-full"
+                      src={getYoutubeEmbedUrl(productoVisor.url_video)}
+                      title="YouTube video player"
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    ></iframe>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Botón Listo */}
+            <button
+              onClick={() => setProductoVisor(null)}
+              className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black rounded-2xl flex items-center justify-center transition-all cursor-pointer text-sm"
+            >
+              Volver al Catálogo
             </button>
           </div>
         </div>

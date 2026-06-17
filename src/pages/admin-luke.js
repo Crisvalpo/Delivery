@@ -91,7 +91,9 @@ export default function AdminLukePage() {
     sku: "",
     stock: 0,
     control_stock: true,
-    codigo_barras: ""
+    codigo_barras: "",
+    descripcion: "",
+    url_video: ""
   });
   const [scannerActivo, setScannerActivo] = useState(false);
   const html5QrCodeRef = useRef(null);
@@ -854,7 +856,9 @@ export default function AdminLukePage() {
         venta_multiplo: producto.venta_multiplo || 1,
         unidades_embalaje: producto.unidades_embalaje || "",
         precio_embalaje_unidad: producto.precio_embalaje_unidad || "",
-        proveedor: producto.proveedor || ""
+        proveedor: producto.proveedor || "",
+        descripcion: producto.descripcion || "",
+        url_video: producto.url_video || ""
       });
     } else {
       setEditingProducto(null);
@@ -874,7 +878,9 @@ export default function AdminLukePage() {
         venta_multiplo: 1,
         unidades_embalaje: "",
         precio_embalaje_unidad: "",
-        proveedor: ""
+        proveedor: "",
+        descripcion: "",
+        url_video: ""
       });
     }
     setShowProductForm(true);
@@ -905,7 +911,9 @@ export default function AdminLukePage() {
         venta_multiplo: parseInt(productForm.venta_multiplo) || 1,
         unidades_embalaje: productForm.unidades_embalaje ? parseInt(productForm.unidades_embalaje) : null,
         precio_embalaje_unidad: productForm.precio_embalaje_unidad ? parseInt(productForm.precio_embalaje_unidad) : null,
-        proveedor: productForm.proveedor.trim() || null
+        proveedor: productForm.proveedor.trim() || null,
+        descripcion: productForm.descripcion.trim() || null,
+        url_video: productForm.url_video.trim() || null
       };
 
       let idParaActualizar = null;
@@ -2384,6 +2392,34 @@ export default function AdminLukePage() {
                   value={productForm.url_imagen_retail}
                   onChange={(e) => setProductForm({ ...productForm, url_imagen_retail: e.target.value })}
                   placeholder="https://..."
+                  className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
+                />
+              </div>
+
+              {/* Descripción del Producto */}
+              <div>
+                <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                  Descripción Detallada
+                </label>
+                <textarea
+                  value={productForm.descripcion}
+                  onChange={(e) => setProductForm({ ...productForm, descripcion: e.target.value })}
+                  placeholder="Información adicional del producto para el cliente (ingredientes, peso, dimensiones, etc.)..."
+                  rows={3}
+                  className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors resize-none"
+                />
+              </div>
+
+              {/* URL de Video de YouTube */}
+              <div>
+                <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                  URL de Video (YouTube)
+                </label>
+                <input
+                  type="text"
+                  value={productForm.url_video}
+                  onChange={(e) => setProductForm({ ...productForm, url_video: e.target.value })}
+                  placeholder="Ej: https://www.youtube.com/watch?v=..."
                   className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
                 />
               </div>
