@@ -631,6 +631,19 @@ Normas de comportamiento:
         const margenConfig = dbConfigs ? dbConfigs.find(c => c.clave === "margen_ganancia") : null;
         const margenPercent = margenConfig ? margenConfig.valor : "20";
 
+        // Consultar categorías comerciales de la base de datos
+        const { data: dbCategorias } = await supabase
+          .from("categorias_comerciales")
+          .select("nombre, tipos_negocio")
+          .order("nombre");
+        
+        let listaCategoriasTexto = "";
+        if (dbCategorias && dbCategorias.length > 0) {
+          listaCategoriasTexto = dbCategorias.map(c => `- ${c.nombre} (Compatible con: ${c.tipos_negocio.join(", ")})`).join("\n");
+        } else {
+          listaCategoriasTexto = "- Abarrotes (Compatible con: Almacén, Minimarket, Fiambrería, Comerciante)\n- Confites (Compatible con: Almacén, Minimarket, Botillería, Comerciante)\n- Limpieza (Compatible con: Almacén, Minimarket, Fiambrería, Comerciante)\n- Verdulería (Compatible con: Almacén, Minimarket, Comerciante)\n- Bebidas (Compatible con: Almacén, Minimarket, Botillería, Comerciante)\n- Juguetería (Compatible con: Almacén, Minimarket, Botillería, Fiambrería, Comerciante)";
+        }
+
         // Consultar ventana activa de pedidos para inyectar en el prompt
         const nowISO = new Date().toISOString();
         const { data: ventanaActiva } = await supabase
@@ -697,22 +710,36 @@ Reglas de Negocio Críticas (No negociables):
 1. El margen de ganancia actual para calcular los precios de venta a partir del precio de costo es del ${margenPercent}%.
 2. Información del estado de Ventanas de Pedidos y despachos:
 ${infoVentanaPrompt}
+3. Categorías comerciales válidas en el sistema (NO inventes categorías no registradas):
+${listaCategoriasTexto}
 `;
 
         if (esAdmin) {
           promptSistema += `
 Reglas adicionales de Administrador:
-1. Al agregar un producto al catálogo dando únicamente el precio de costo, NO preguntes por el precio de venta. Llama inmediatamente a la función "crear_producto" omitiendo el parámetro "precio" (el sistema calculará automáticamente el precio de venta agregando el ${margenPercent}% de margen).
-2. Si proporcionas explícitamente tanto el precio de costo como el precio de venta, llama a "crear_producto" pasando ambos parámetros.
-3. Al crear o actualizar un producto, debes clasificarlo de forma precisa y obligatoria en la categoría comercial más adecuada usando estrictamente una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería' o 'Bebidas'.
+1. Al agregar un producto al catálogo dando únicamente el precio de costo, NO preguntes por el precio de venta. Llama inmediatamente a la función "crear_producto" omitiendo el parámetro "precio" (el sistema calculará automáticamente el precio de venta agregando el ${margenPercent}% de margen), pero asegurándote de solicitar o pasar el parámetro de "stock" (cantidad inicial). El stock es un parámetro REQUERIDO para la creación.
+2. Si proporcionas explícitamente tanto el precio de costo como el precio de venta, llama a "crear_producto" pasando ambos parámetros, además del stock.
+3. Al crear o actualizar un producto, debes clasificarlo de forma precisa y obligatoria en la categoría comercial más adecuada usando estrictamente una de las categorías comerciales válidas registradas en el sistema.
 4. Antes de llamar a "crear_producto", revisa siempre la lista de productos actual. Si ya existe un producto con el mismo nombre y formato, NO lo vuelvas a crear; en su lugar, utiliza la herramienta "actualizar_detalles_producto".
 5. Al crear un nuevo producto con "crear_producto", NO solicites fotos ni imágenes al administrador si no las proporciona voluntariamente. El sistema tiene una imagen placeholder por defecto, por lo que simplemente omite el parámetro "url_imagen_retail".
 6. Si el administrador pide asociar, vincular o registrar un código de barras a un producto existente (ej. "asociar código 7800000000000 al Chocman"), llama inmediatamente a "actualizar_detalles_producto" con el parámetro "nuevo_codigo_barras".
+7. Como administrador, tienes la capacidad de gestionar (crear, actualizar o eliminar) las categorías comerciales de la base de datos usando las herramientas "crear_categoria_comercial", "actualizar_categoria_comercial" y "eliminar_categoria_comercial".
+8. Para crear un nuevo producto es obligatorio conocer la cantidad inicial en stock (stock). Si el administrador te solicita agregar un producto pero no especifica la cantidad de stock inicial, NO debes llamar a "crear_producto". En su lugar, pregúntale explícitamente la cantidad inicial para ese producto.
+
 `;
 
           // Mapa del Mundo (Metadata RAG) e instrucciones de Meta-Tooling
           const mapaDelMundo = {
             database_schema: {
+              "public.categorias_comerciales": {
+                descripcion: "Tabla maestra de categorías comerciales y su compatibilidad con los tipos de negocio.",
+                columnas: {
+                  "id": "UUID (Clave Primaria)",
+                  "nombre": "TEXT - Nombre de la categoría comercial (ej. 'Abarrotes', 'Limpieza')",
+                  "tipos_negocio": "TEXT[] - Array de tipos de negocio compatibles (ej. '{\"Almacén\", \"Minimarket\"}')",
+                  "created_at": "TIMESTAMP - Fecha de registro"
+                }
+              },
               "public.productos": {
                 descripcion: "Catálogo de productos a la venta en el sistema LukeDelivery.",
                 columnas: {
@@ -721,7 +748,7 @@ Reglas adicionales de Administrador:
                   "formato_venta": "TEXT - Formato en que se vende (ej. 'Saco 25kg', 'Bolsa 1u')",
                   "precio": "INTEGER - Precio de venta al público en pesos chilenos (CLP)",
                   "precio_costo": "INTEGER - Precio de costo mayorista en pesos chilenos (CLP)",
-                  "categoria": "TEXT - Categoría comercial ('Abarrotes', 'Confites', 'Limpieza', 'Verdulería', 'Bebidas')",
+                  "categoria": "TEXT - Categoría comercial. Debe existir en public.categorias_comerciales.nombre",
                   "tipo_bulto": "TEXT - Clasificación de peso/volumen ('Pesado', 'Estándar')",
                   "sku": "TEXT - Código único de producto (ej. 'LD-AB123')",
                   "url_imagen_retail": "TEXT - URL de la imagen del producto. Si no tiene una imagen asociada, se almacena por defecto la URL de placeholder: 'https://cdn.pesco.cl/wp-content/uploads/2021/03/producto_sin_imagen.png'",
@@ -971,6 +998,25 @@ ${urlImagenPublicaTemp}
           : "No hay mensajes recientes.";
         if (!historialTexto.trim()) historialTexto = "No hay historial de conversación reciente.";
 
+        // Evitar saludos repetitivos si ya hay conversación activa
+        const tieneHistorialActivo = historialCronologico && historialCronologico.length > 0;
+        if (tieneHistorialActivo) {
+          promptSistema += `
+
+Reglas de Control de Saludos y Respuestas Continuas:
+1. La conversación YA ESTÁ EN CURSO. Se han intercambiado mensajes anteriormente.
+2. Por lo tanto, está ESTRICTAMENTE PROHIBIDO iniciar tu respuesta con un saludo (como "¡Hola!", "¡Hola de nuevo, [Nombre]!", "¿Cómo estás?", etc.).
+3. No uses fórmulas introductorias redundantes. Responde de manera directa, concisa y ve directo al grano a resolver la consulta o comando actual del usuario.
+`;
+        } else {
+          promptSistema += `
+
+Reglas de Control de Saludos y Respuestas Continuas:
+1. Este es el inicio de la conversación (no hay mensajes previos en el historial).
+2. Saluda de forma amigable y cercana al usuario al inicio de tu respuesta conforme a las normas de comportamiento.
+`;
+        }
+
         // MEJORA 4: Si hay >18 mensajes sin resumen reciente, generar resumen en background (fire & forget)
         const totalMsgSinResumen = historialSinResumen.length;
         const tieneResumenReciente = ultimoResumen &&
@@ -1135,8 +1181,7 @@ ${urlImagenPublicaTemp}
                 },
                 categoria: {
                   type: "STRING",
-                  enum: ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"],
-                  description: "La categoría comercial del producto. Debe ser estrictamente una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería', 'Bebidas'. Es requerida."
+                  description: "La categoría comercial del producto. Debe ser una de las categorías comerciales registradas en el sistema (ej. 'Abarrotes', 'Confites', etc.). Es requerida."
                 },
                 sku: {
                   type: "STRING",
@@ -1148,14 +1193,14 @@ ${urlImagenPublicaTemp}
                 },
                 stock: {
                   type: "INTEGER",
-                  description: "El stock inicial del producto en inventario (opcional). Por defecto es 0."
+                  description: "El stock inicial del producto en inventario (requerido). Si el usuario no te da la cantidad de stock inicial, debes preguntarle explícitamente la cantidad antes de llamar a esta función."
                 },
                 codigo_barras: {
                   type: "STRING",
                   description: "El código de barras físico del producto (opcional). Suministrar si el usuario lo dicta o escanea."
                 }
               },
-              required: ["nombre", "formato_venta", "precio_costo", "categoria"]
+              required: ["nombre", "formato_venta", "precio_costo", "categoria", "stock"]
             }
           },
           {
@@ -1219,8 +1264,7 @@ ${urlImagenPublicaTemp}
                 },
                 nueva_categoria: {
                   type: "STRING",
-                  enum: ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"],
-                  description: "La nueva categoría comercial del producto (opcional). Debe ser una de las siguientes: 'Abarrotes', 'Confites', 'Limpieza', 'Verdulería', 'Bebidas'."
+                  description: "La nueva categoría comercial del producto (opcional). Debe ser una de las categorías comerciales registradas en el sistema."
                 },
                 nuevo_stock: {
                   type: "INTEGER",
@@ -1232,6 +1276,68 @@ ${urlImagenPublicaTemp}
                 }
               },
               required: ["nombre_producto"]
+            }
+          },
+          {
+            name: "crear_categoria_comercial",
+            description: "Crea una nueva categoría comercial en el sistema LukeDelivery. Usa esta función cuando el administrador pida agregar o crear una nueva categoría comercial indicando su nombre y los tipos de negocio compatibles.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                nombre: {
+                  type: "STRING",
+                  description: "El nombre de la nueva categoría comercial (ej. 'Ferretería', 'Fiambrería')."
+                },
+                tipos_negocio_compatibles: {
+                  type: "ARRAY",
+                  items: {
+                    type: "STRING",
+                    enum: ["Almacén", "Minimarket", "Botillería", "Fiambrería", "Comerciante"]
+                  },
+                  description: "Lista de tipos de negocio compatibles con esta categoría comercial. Opcional (si se omite, será compatible con todos)."
+                }
+              },
+              required: ["nombre"]
+            }
+          },
+          {
+            name: "actualizar_categoria_comercial",
+            description: "Actualiza los detalles de una categoría comercial existente (nombre o compatibilidad de tipos de negocio). Usa esta función cuando el administrador solicite editar o modificar una categoría.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                nombre_actual: {
+                  type: "STRING",
+                  description: "El nombre actual de la categoría comercial que se desea modificar."
+                },
+                nuevo_nombre: {
+                  type: "STRING",
+                  description: "El nuevo nombre para la categoría comercial (opcional)."
+                },
+                nuevos_tipos_negocio: {
+                  type: "ARRAY",
+                  items: {
+                    type: "STRING",
+                    enum: ["Almacén", "Minimarket", "Botillería", "Fiambrería", "Comerciante"]
+                  },
+                  description: "La nueva lista de tipos de negocio compatibles (opcional)."
+                }
+              },
+              required: ["nombre_actual"]
+            }
+          },
+          {
+            name: "eliminar_categoria_comercial",
+            description: "Elimina una categoría comercial del sistema si no tiene productos activos asociados. Usa esta función cuando el administrador pida borrar una categoría comercial.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                nombre: {
+                  type: "STRING",
+                  description: "El nombre de la categoría comercial a eliminar."
+                }
+              },
+              required: ["nombre"]
             }
           }
         ];
@@ -1558,6 +1664,7 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                     const { error } = await supabase
                       .from("productos")
                       .update(updates)
+                      .eq("activo", true)
                       .ilike("nombre", `%${nombre_producto}%`);
 
                     if (error) {
@@ -1651,7 +1758,10 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                     if (categoria) updates.categoria = categoria;
                     if (cleanSku) updates.sku = cleanSku;
                     if (url_imagen_retail && url_imagen_retail.trim()) updates.url_imagen_retail = finalImgUrl;
-                    if (stock !== undefined) updates.stock = stock;
+                    if (stock !== undefined) {
+                      updates.stock = stock;
+                      updates.control_stock = true; // Activar control de stock si se proporciona un nuevo valor explícito
+                    }
                     if (codigo_barras !== undefined) updates.codigo_barras = codigo_barras;
 
                     const { error: updateError } = await supabase
@@ -1689,7 +1799,8 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                       tipo_bulto: finalBulto,
                       url_imagen_retail: finalImgUrl,
                       disponible: true,
-                      activo: true
+                      activo: true,
+                      control_stock: stock !== undefined // Si especifican stock, requiere control. Si no, stock ilimitado (false).
                     };
                     if (stock !== undefined) insertObj.stock = stock;
                     if (codigo_barras !== undefined) insertObj.codigo_barras = codigo_barras;
@@ -1720,6 +1831,7 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                   const { error } = await supabase
                     .from("productos")
                     .update({ disponible: disponible })
+                    .eq("activo", true)
                     .ilike("nombre", `%${nombre_producto}%`);
 
                   dbResult = error
@@ -1731,6 +1843,7 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                   const { error } = await supabase
                     .from("productos")
                     .update({ activo: false })
+                    .eq("activo", true)
                     .ilike("nombre", `%${nombre_producto}%`);
 
                   dbResult = error
@@ -1756,6 +1869,7 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                     const { data: prodToUpdate } = await supabase
                       .from("productos")
                       .select("id, stock")
+                      .eq("activo", true)
                       .ilike("nombre", `%${nombre_producto}%`)
                       .limit(1)
                       .maybeSingle();
@@ -1786,6 +1900,74 @@ Respuesta del asistente (si el usuario se desvía de forma insistente (tras habe
                         dbResult = `Éxito: Los detalles del producto que coincide con "${nombre_producto}" se han actualizado correctamente en Supabase. Campos modificados: ${Object.keys(updates).join(", ")}.`;
                       }
                     }
+                  }
+                }
+                else if (name === "crear_categoria_comercial") {
+                  const { nombre, tipos_negocio_compatibles } = args;
+                  const { error } = await supabase
+                    .from("categorias_comerciales")
+                    .insert([{
+                      nombre: nombre.trim(),
+                      tipos_negocio: tipos_negocio_compatibles || ['Almacén', 'Minimarket', 'Botillería', 'Fiambrería', 'Comerciante']
+                    }]);
+
+                  dbResult = error
+                    ? `Error al crear categoría comercial: ${error.message}`
+                    : `Éxito: La categoría comercial "${nombre}" ha sido creada con compatibilidad para: ${(tipos_negocio_compatibles || ['Almacén', 'Minimarket', 'Botillería', 'Fiambrería', 'Comerciante']).join(", ")}.`;
+                }
+                else if (name === "actualizar_categoria_comercial") {
+                  const { nombre_actual, nuevo_nombre, nuevos_tipos_negocio } = args;
+                  const updates = {};
+                  if (nuevo_nombre !== undefined) updates.nombre = nuevo_nombre.trim();
+                  if (nuevos_tipos_negocio !== undefined) updates.tipos_negocio = nuevos_tipos_negocio;
+
+                  if (Object.keys(updates).length === 0) {
+                    dbResult = "Error: No se especificaron campos válidos para actualizar.";
+                  } else {
+                    let transError = null;
+                    if (updates.nombre) {
+                      const { error: prodErr } = await supabase
+                        .from("productos")
+                        .update({ categoria: updates.nombre })
+                        .eq("categoria", nombre_actual);
+                      if (prodErr) transError = prodErr;
+                    }
+
+                    if (!transError) {
+                      const { error: catErr } = await supabase
+                        .from("categorias_comerciales")
+                        .update(updates)
+                        .eq("nombre", nombre_actual);
+                      if (catErr) transError = catErr;
+                    }
+
+                    dbResult = transError
+                      ? `Error al actualizar la categoría comercial: ${transError.message}`
+                      : `Éxito: La categoría comercial "${nombre_actual}" se ha actualizado correctamente.`;
+                  }
+                }
+                else if (name === "eliminar_categoria_comercial") {
+                  const { nombre } = args;
+                  const { data: prodsDependientes, error: countErr } = await supabase
+                    .from("productos")
+                    .select("id")
+                    .eq("categoria", nombre)
+                    .eq("activo", true)
+                    .limit(1);
+
+                  if (countErr) {
+                    dbResult = `Error al verificar dependencias: ${countErr.message}`;
+                  } else if (prodsDependientes && prodsDependientes.length > 0) {
+                    dbResult = `Error: No se puede eliminar la categoría "${nombre}" porque existen productos activos en ella. Primero debes reasignar o eliminar esos productos.`;
+                  } else {
+                    const { error: deleteErr } = await supabase
+                      .from("categorias_comerciales")
+                      .delete()
+                      .eq("nombre", nombre);
+
+                    dbResult = deleteErr
+                      ? `Error al eliminar categoría comercial: ${deleteErr.message}`
+                      : `Éxito: La categoría comercial "${nombre}" ha sido eliminada con éxito.`;
                   }
                 }
                 else if (name === "crear_herramienta_dinamica") {

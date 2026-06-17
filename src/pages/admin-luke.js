@@ -71,6 +71,7 @@ export default function AdminLukePage() {
   const [consolidadoItems, setConsolidadoItems] = useState([]);
   const [loadingConsolidado, setLoadingConsolidado] = useState(false);
   const [proveedores, setProveedores] = useState([]);
+  const [categoriasDB, setCategoriasDB] = useState([]);
   
   // Filtros, buscador y paginación para el catálogo
   const [filtroNombreSku, setFiltroNombreSku] = useState("");
@@ -237,11 +238,25 @@ export default function AdminLukePage() {
     }
   }, [supabase]);
 
+  const fetchCategorias = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("categorias_comerciales")
+        .select("*")
+        .order("nombre", { ascending: true });
+      if (error) throw error;
+      setCategoriasDB(data || []);
+    } catch (err) {
+      console.error("[AdminLuke] Error cargando categorías comerciales:", err);
+    }
+  }, [supabase]);
+
   useEffect(() => {
     fetchClientes();
     fetchVentanas();
     fetchProveedores();
-  }, [fetchClientes, fetchVentanas, fetchProveedores]);
+    fetchCategorias();
+  }, [fetchClientes, fetchVentanas, fetchProveedores, fetchCategorias]);
 
   useEffect(() => {
     setPaginaActual(1);
@@ -253,6 +268,7 @@ export default function AdminLukePage() {
     "Limpieza", 
     "Verdulería", 
     "Bebidas",
+    ...categoriasDB.map((c) => c.nombre),
     ...productos.map((p) => p.categoria).filter(Boolean),
     productForm.categoria
   ])).filter(Boolean).sort();
@@ -2342,12 +2358,26 @@ export default function AdminLukePage() {
                   </label>
                   <select
                     value={productForm.categoria}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const val = e.target.value;
                       if (val === "__NUEVA__") {
                         const nueva = window.prompt("Ingresa el nombre de la nueva categoría comercial:");
                         if (nueva && nueva.trim()) {
-                          setProductForm({ ...productForm, categoria: nueva.trim() });
+                          const nombreLimpio = nueva.trim();
+                          try {
+                            const { error } = await supabase
+                              .from("categorias_comerciales")
+                              .insert([{
+                                nombre: nombreLimpio,
+                                tipos_negocio: ['Almacén', 'Minimarket', 'Botillería', 'Fiambrería', 'Comerciante']
+                              }]);
+                            if (error) throw error;
+                            await fetchCategorias();
+                            setProductForm({ ...productForm, categoria: nombreLimpio });
+                          } catch (err) {
+                            console.error("[AdminLuke] Error al crear categoría comercial:", err);
+                            alert("No se pudo crear la categoría comercial: " + err.message);
+                          }
                         }
                       } else {
                         setProductForm({ ...productForm, categoria: val });

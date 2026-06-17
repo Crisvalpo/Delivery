@@ -17,7 +17,7 @@ import {
 
 const MONTO_MINIMO = 35000;
 
-const CATEGORIAS_COMPATIBLES = {
+const CATEGORIAS_COMPATIBLES_FALLBACK = {
   "Almacén": ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas", "Juguetería"],
   "Minimarket": ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas", "Juguetería"],
   "Botillería": ["Bebidas", "Confites", "Juguetería"],
@@ -89,6 +89,7 @@ export default function PedidoPage() {
 
   const [productos, setProductos] = useState([]);
   const [carrito, setCarrito] = useState({});
+  const [categoriasCompatibles, setCategoriasCompatibles] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tokenError, setTokenError] = useState(null);
@@ -152,11 +153,12 @@ export default function PedidoPage() {
 
   const getCatsPermitidas = (tipoNegocio) => {
     const key = cleanKey(tipoNegocio);
-    if (key.includes("botill")) return CATEGORIAS_COMPATIBLES["Botillería"];
-    if (key.includes("fiambr")) return CATEGORIAS_COMPATIBLES["Fiambrería"];
-    if (key.includes("minim")) return CATEGORIAS_COMPATIBLES["Minimarket"];
-    if (key.includes("comerc")) return CATEGORIAS_COMPATIBLES["Comerciante"];
-    return CATEGORIAS_COMPATIBLES["Almacén"];
+    const catCompat = Object.keys(categoriasCompatibles).length > 0 ? categoriasCompatibles : CATEGORIAS_COMPATIBLES_FALLBACK;
+    if (key.includes("botill")) return catCompat["Botillería"] || [];
+    if (key.includes("fiambr")) return catCompat["Fiambrería"] || [];
+    if (key.includes("minim")) return catCompat["Minimarket"] || [];
+    if (key.includes("comerc")) return catCompat["Comerciante"] || [];
+    return catCompat["Almacén"] || [];
   };
 
   const cleanCat = (catName) => {
@@ -308,6 +310,30 @@ export default function PedidoPage() {
 
         if (pgErr) throw pgErr;
         setProductos(pgProds || []);
+
+        // 3. Cargar categorías comerciales
+        const { data: pgCats, error: pgCatsErr } = await supabase
+          .from("categorias_comerciales")
+          .select("nombre, tipos_negocio");
+
+        if (!pgCatsErr && pgCats) {
+          const map = {};
+          const tiposConocidos = ["Almacén", "Minimarket", "Botillería", "Fiambrería", "Comerciante"];
+          tiposConocidos.forEach(t => {
+            map[t] = [];
+          });
+          pgCats.forEach(cat => {
+            if (cat.tipos_negocio) {
+              cat.tipos_negocio.forEach(t => {
+                if (!map[t]) map[t] = [];
+                if (!map[t].includes(cat.nombre)) {
+                  map[t].push(cat.nombre);
+                }
+              });
+            }
+          });
+          setCategoriasCompatibles(map);
+        }
       } catch (err) {
         console.error("[LukeDelivery] Error de inicialización:", err);
         setTokenError(err.message);
