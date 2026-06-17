@@ -179,6 +179,7 @@ export default function RegistroPage() {
     "Minimarket",
     "Botillería",
     "Fiambrería",
+    "Comerciante",
   ];
 
   // --- Geofencing local para deducir Sector ---

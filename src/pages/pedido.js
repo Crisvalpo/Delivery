@@ -18,10 +18,11 @@ import {
 const MONTO_MINIMO = 35000;
 
 const CATEGORIAS_COMPATIBLES = {
-  "Almacén": ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"],
-  "Minimarket": ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"],
-  "Botillería": ["Bebidas", "Confites"],
-  "Fiambrería": ["Abarrotes", "Limpieza"]
+  "Almacén": ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas", "Juguetería"],
+  "Minimarket": ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas", "Juguetería"],
+  "Botillería": ["Bebidas", "Confites", "Juguetería"],
+  "Fiambrería": ["Abarrotes", "Limpieza", "Juguetería"],
+  "Comerciante": ["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas", "Juguetería"]
 };
 
 function obtenerDesglose(Q, E, M) {
@@ -88,11 +89,12 @@ export default function PedidoPage() {
   const [tokenUsado, setTokenUsado] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("Todas");
-  const [limiteProductos, setLimiteProductos] = useState(20);
+  const [paginaActual, setPaginaActual] = useState(1);
+  const PRODUCTOS_POR_PAGINA = 20;
 
-  // Reiniciar el límite de renderizado al filtrar
+  // Reiniciar la página al filtrar o cambiar categoría
   useEffect(() => {
-    setLimiteProductos(20);
+    setPaginaActual(1);
   }, [busqueda, categoriaSeleccionada]);
 
   const supabase = createClient();
@@ -140,6 +142,7 @@ export default function PedidoPage() {
     if (key.includes("botill")) return CATEGORIAS_COMPATIBLES["Botillería"];
     if (key.includes("fiambr")) return CATEGORIAS_COMPATIBLES["Fiambrería"];
     if (key.includes("minim")) return CATEGORIAS_COMPATIBLES["Minimarket"];
+    if (key.includes("comerc")) return CATEGORIAS_COMPATIBLES["Comerciante"];
     return CATEGORIAS_COMPATIBLES["Almacén"];
   };
 
@@ -149,13 +152,25 @@ export default function PedidoPage() {
   };
 
   const tipo = clienteInfo?.tipo_negocio || "Almacén";
-  const catsPermitidas = getCatsPermitidas(tipo);
+  const catsSugeridas = getCatsPermitidas(tipo);
   
-  // 1. Filtrar productos compatibles con el tipo de negocio del cliente
-  const productosCompatibles = productos.filter((p) => {
-    const pCat = cleanCat(p.categoria || "Abarrotes");
-    return catsPermitidas.some(c => cleanCat(c) === pCat);
-  });
+  // 1. Todos los tipos de negocios pueden visualizar y filtrar todas las categorías
+  const productosCompatibles = productos;
+
+  // Clasificar y ordenar categorías dinámicamente: sugeridas primero, luego el resto
+  const categoriasDeProductos = Array.from(
+    new Set(productos.map((p) => p.categoria || "Abarrotes"))
+  );
+
+  const sugeridasActivas = categoriasDeProductos.filter((cat) =>
+    catsSugeridas.some((c) => cleanCat(c) === cleanCat(cat))
+  ).sort((a, b) => a.localeCompare(b, "es"));
+
+  const noSugeridasActivas = categoriasDeProductos.filter((cat) =>
+    !catsSugeridas.some((c) => cleanCat(c) === cleanCat(cat))
+  ).sort((a, b) => a.localeCompare(b, "es"));
+
+  const catsParaMostrar = [...sugeridasActivas, ...noSugeridasActivas];
 
   // 2. Filtrar por buscador y categoría seleccionada
   const productosFiltrados = productosCompatibles.filter((p) => {
@@ -188,8 +203,12 @@ export default function PedidoPage() {
     return a.nombre.localeCompare(b.nombre, "es");
   });
 
-  // 4. Limitar el renderizado a la cantidad definida por limiteProductos
-  const productosVisibles = productosOrdenados.slice(0, limiteProductos);
+  // 4. Calcular paginación real
+  const totalPaginas = Math.ceil(productosFiltrados.length / PRODUCTOS_POR_PAGINA);
+  const productosVisibles = productosOrdenados.slice(
+    (paginaActual - 1) * PRODUCTOS_POR_PAGINA,
+    paginaActual * PRODUCTOS_POR_PAGINA
+  );
 
   // --- Carga de productos e inicialización de sesión ---
   useEffect(() => {
@@ -635,8 +654,8 @@ export default function PedidoPage() {
                     Todas ({productosCompatibles.length})
                   </button>
 
-                  {/* Botones de categorías permitidas */}
-                  {catsPermitidas.map((catName) => {
+                  {/* Botones de todas las categorías, sugiriendo con ⭐ */}
+                  {catsParaMostrar.map((catName) => {
                     const totalCat = productosCompatibles.filter(
                       (p) => cleanCat(p.categoria || "Abarrotes") === cleanCat(catName)
                     ).length;
@@ -644,6 +663,7 @@ export default function PedidoPage() {
                     if (totalCat === 0) return null;
 
                     const isSelected = categoriaSeleccionada === catName;
+                    const esSugerida = sugeridasActivas.some(c => cleanCat(c) === cleanCat(catName));
 
                     return (
                       <button
@@ -655,7 +675,7 @@ export default function PedidoPage() {
                             : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
                         }`}
                       >
-                        {catName} ({totalCat})
+                        {esSugerida ? `⭐ ${catName}` : catName} ({totalCat})
                       </button>
                     );
                   })}
@@ -672,7 +692,7 @@ export default function PedidoPage() {
                   </p>
                 </div>
               ) : (
-                catsPermitidas.map((catName) => {
+                catsParaMostrar.map((catName) => {
                   // Filtrar los productos visibles que pertenecen a esta categoría
                   const prodsDeCat = productosVisibles.filter(
                     (p) => cleanCat(p.categoria || "Abarrotes") === cleanCat(catName)
@@ -680,11 +700,13 @@ export default function PedidoPage() {
 
                   if (prodsDeCat.length === 0) return null;
 
+                  const esSugerida = sugeridasActivas.some(c => cleanCat(c) === cleanCat(catName));
+
                   return (
                     <div key={catName} className="mb-6">
                       {/* Category Header */}
                       <h2 className="text-lg font-extrabold text-gray-800 mb-4 border-b-2 border-gray-200 pb-2 flex items-center justify-between">
-                        <span>{catName}</span>
+                        <span>{esSugerida ? `⭐ ${catName}` : catName}</span>
                         <span className="text-xs bg-brand/10 text-brand px-2.5 py-0.5 rounded-full font-bold">
                           {productosFiltrados.filter(p => cleanCat(p.categoria || "Abarrotes") === cleanCat(catName)).length} totales
                         </span>
@@ -991,14 +1013,35 @@ export default function PedidoPage() {
               )}
             </div>
 
-            {/* ===== BOTÓN CARGAR MÁS ===== */}
-            {productosFiltrados.length > limiteProductos && (
-              <div className="flex justify-center pt-2 pb-6">
+            {/* ===== CONTROLES DE PAGINACIÓN REAL ===== */}
+            {totalPaginas > 1 && (
+              <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl p-4 mt-4 mb-6 shadow-sm">
                 <button
-                  onClick={() => setLimiteProductos(prev => prev + 20)}
-                  className="px-6 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-600 hover:text-slate-800 hover:border-slate-300 shadow-sm active:scale-95 transition-all cursor-pointer"
+                  onClick={() => setPaginaActual((prev) => Math.max(1, prev - 1))}
+                  disabled={paginaActual === 1}
+                  className={`px-4 py-2 border rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    paginaActual === 1
+                      ? "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
+                      : "bg-white border-slate-200 text-slate-650 hover:bg-slate-50 hover:text-slate-800"
+                  }`}
                 >
-                  Cargar más productos ({productosFiltrados.length - limiteProductos} restantes)
+                  ← Anterior
+                </button>
+
+                <span className="text-xs font-bold text-slate-500">
+                  Página {paginaActual} de {totalPaginas}
+                </span>
+
+                <button
+                  onClick={() => setPaginaActual((prev) => Math.min(totalPaginas, prev + 1))}
+                  disabled={paginaActual === totalPaginas}
+                  className={`px-4 py-2 border rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    paginaActual === totalPaginas
+                      ? "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
+                      : "bg-white border-slate-200 text-slate-650 hover:bg-slate-50 hover:text-slate-800"
+                  }`}
+                >
+                  Siguiente →
                 </button>
               </div>
             )}

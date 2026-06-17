@@ -1447,7 +1447,7 @@ export default function AdminLukePage() {
                   }
                   className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-sm text-text-primary focus:border-brand/50 focus:outline-none transition-colors cursor-pointer"
                 >
-                  {["Almacén", "Minimarket", "Botillería", "Fiambrería"].map((t) => (
+                  {["Almacén", "Minimarket", "Botillería", "Fiambrería", "Comerciante"].map((t) => (
                     <option key={t} value={t}>
                       {t}
                     </option>
