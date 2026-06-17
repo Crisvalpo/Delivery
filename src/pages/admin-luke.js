@@ -70,6 +70,7 @@ export default function AdminLukePage() {
   const [showConsolidateModal, setShowConsolidateModal] = useState(false);
   const [consolidadoItems, setConsolidadoItems] = useState([]);
   const [loadingConsolidado, setLoadingConsolidado] = useState(false);
+  const [proveedores, setProveedores] = useState([]);
   
   // Filtros, buscador y paginación para el catálogo
   const [filtroNombreSku, setFiltroNombreSku] = useState("");
@@ -221,10 +222,24 @@ export default function AdminLukePage() {
     }
   }, []);
 
+  const fetchProveedores = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("proveedores")
+        .select("id, nombre")
+        .order("nombre", { ascending: true });
+      if (error) throw error;
+      setProveedores(data || []);
+    } catch (err) {
+      console.error("[AdminLuke] Error cargando proveedores:", err);
+    }
+  }, [supabase]);
+
   useEffect(() => {
     fetchClientes();
     fetchVentanas();
-  }, [fetchClientes, fetchVentanas]);
+    fetchProveedores();
+  }, [fetchClientes, fetchVentanas, fetchProveedores]);
 
   useEffect(() => {
     setPaginaActual(1);
@@ -825,7 +840,11 @@ export default function AdminLukePage() {
         sku: producto.sku || "",
         stock: producto.stock || 0,
         control_stock: producto.control_stock !== false,
-        codigo_barras: producto.codigo_barras || ""
+        codigo_barras: producto.codigo_barras || "",
+        venta_multiplo: producto.venta_multiplo || 1,
+        unidades_embalaje: producto.unidades_embalaje || "",
+        precio_embalaje_unidad: producto.precio_embalaje_unidad || "",
+        proveedor: producto.proveedor || ""
       });
     } else {
       setEditingProducto(null);
@@ -841,7 +860,11 @@ export default function AdminLukePage() {
         sku: "",
         stock: 0,
         control_stock: true,
-        codigo_barras: ""
+        codigo_barras: "",
+        venta_multiplo: 1,
+        unidades_embalaje: "",
+        precio_embalaje_unidad: "",
+        proveedor: ""
       });
     }
     setShowProductForm(true);
@@ -868,7 +891,11 @@ export default function AdminLukePage() {
         sku: productForm.sku.trim() || "LD-" + Math.random().toString(36).substring(2, 7).toUpperCase(),
         stock: parseInt(productForm.stock) || 0,
         control_stock: productForm.control_stock,
-        codigo_barras: productForm.codigo_barras.trim() || null
+        codigo_barras: productForm.codigo_barras.trim() || null,
+        venta_multiplo: parseInt(productForm.venta_multiplo) || 1,
+        unidades_embalaje: productForm.unidades_embalaje ? parseInt(productForm.unidades_embalaje) : null,
+        precio_embalaje_unidad: productForm.precio_embalaje_unidad ? parseInt(productForm.precio_embalaje_unidad) : null,
+        proveedor: productForm.proveedor.trim() || null
       };
 
       let idParaActualizar = null;
@@ -1243,6 +1270,15 @@ export default function AdminLukePage() {
                   >
                     <Users className="h-4 w-4 text-emerald-400" />
                     <span>Gestionar Personal</span>
+                  </button>
+
+                  {/* Gestionar Proveedores */}
+                  <button
+                    onClick={() => { window.location.href = '/admin-proveedores'; setShowMenu(false); }}
+                    className="flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-all text-text-secondary hover:text-text-primary hover:bg-bg-surface-2 hover:border-white/5 border border-transparent cursor-pointer"
+                  >
+                    <Truck className="h-4 w-4 text-emerald-400" />
+                    <span>Gestionar Proveedores</span>
                   </button>
                 </div>
 
@@ -1806,6 +1842,15 @@ export default function AdminLukePage() {
                           <div className="flex-1 min-w-0">
                             <h4 className="font-bold text-sm text-text-primary truncate">{cleanText(prod.nombre)}</h4>
                             <p className="text-xs text-text-dim">{cleanText(prod.formato_venta)} {prod.sku && `· ${prod.sku}`}</p>
+                            {prod.venta_multiplo > 1 && (
+                              <span className="text-[10px] text-brand block mt-0.5 font-bold">Pack Mínimo: {prod.venta_multiplo}u</span>
+                            )}
+                            {prod.unidades_embalaje && (
+                              <span className="text-[10px] text-emerald-400 block mt-0.5 font-bold">Caja: {prod.unidades_embalaje}u (${prod.precio_embalaje_unidad || prod.precio}/u)</span>
+                            )}
+                            {prod.proveedor && (
+                              <span className="text-[10px] text-amber-500 block mt-0.5 font-bold">Proveedor: {cleanText(prod.proveedor)}</span>
+                            )}
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
                             <button
@@ -1899,7 +1944,16 @@ export default function AdminLukePage() {
                             </td>
                             <td className="py-3 font-mono text-[10px] text-text-dim">{prod.sku || "-"}</td>
                             <td className="py-3 font-semibold text-text-primary pr-3 leading-relaxed break-words">{cleanText(prod.nombre)}</td>
-                            <td className="py-3 pr-3 font-medium text-text-secondary break-words">{cleanText(prod.formato_venta)}</td>
+                            <td className="py-3 pr-3 font-medium text-text-secondary break-words">
+                               {cleanText(prod.formato_venta)}
+                               {(prod.venta_multiplo > 1 || prod.unidades_embalaje || prod.proveedor) && (
+                                 <div className="text-[10px] text-text-dim mt-0.5 font-bold space-y-0.5">
+                                   {prod.venta_multiplo > 1 && <div>Pack: {prod.venta_multiplo}u</div>}
+                                   {prod.unidades_embalaje && <div className="text-emerald-400">Caja: {prod.unidades_embalaje}u (${prod.precio_embalaje_unidad || prod.precio}/u)</div>}
+                                   {prod.proveedor && <div className="text-amber-500 font-extrabold">Prov: {cleanText(prod.proveedor)}</div>}
+                                 </div>
+                               )}
+                            </td>
                             <td className="py-3 font-bold text-text-primary">${prod.precio.toLocaleString("es-CL")}</td>
                             <td className="py-3 text-text-dim">${prod.precio_costo.toLocaleString("es-CL")}</td>
                             <td className="py-3">
@@ -2192,6 +2246,53 @@ export default function AdminLukePage() {
                 </div>
               </div>
 
+              {/* Configuración de Packs y Cajas */}
+              <div className="border border-border/40 bg-bg-surface-2/20 p-3.5 rounded-xl space-y-3">
+                <span className="block text-[10px] font-black text-text-dim uppercase tracking-wider">
+                  Configuración de Packs y Cajas
+                </span>
+                
+                <div>
+                  <label className="block text-[9px] font-bold text-text-dim uppercase mb-1">
+                    Múltiplo de Venta Minorista (Pack Mínimo)
+                  </label>
+                  <input
+                    type="number"
+                    value={productForm.venta_multiplo}
+                    onChange={(e) => setProductForm({ ...productForm, venta_multiplo: e.target.value })}
+                    placeholder="Ej: 12 (1 para venta por unidades)"
+                    className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[9px] font-bold text-text-dim uppercase mb-1">
+                      Unidades por Caja
+                    </label>
+                    <input
+                      type="number"
+                      value={productForm.unidades_embalaje}
+                      onChange={(e) => setProductForm({ ...productForm, unidades_embalaje: e.target.value })}
+                      placeholder="Ej: 80"
+                      className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-text-dim uppercase mb-1">
+                      P. Unitario Caja ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={productForm.precio_embalaje_unidad}
+                      onChange={(e) => setProductForm({ ...productForm, precio_embalaje_unidad: e.target.value })}
+                      placeholder="Ej: 1800"
+                      className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:border-brand/50 focus:outline-none transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Tipo de Bulto */}
               <div>
                 <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
@@ -2215,22 +2316,41 @@ export default function AdminLukePage() {
                 </div>
               </div>
 
-              {/* Categoría de Negocio */}
-              <div>
-                <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
-                  Categoría Comercial
-                </label>
-                <select
-                  value={productForm.categoria}
-                  onChange={(e) => setProductForm({ ...productForm, categoria: e.target.value })}
-                  className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary focus:border-brand/50 focus:outline-none transition-colors cursor-pointer"
-                >
-                  {["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"].map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+              {/* Categoría y Proveedor */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                    Categoría Comercial
+                  </label>
+                  <select
+                    value={productForm.categoria}
+                    onChange={(e) => setProductForm({ ...productForm, categoria: e.target.value })}
+                    className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary focus:border-brand/50 focus:outline-none transition-colors cursor-pointer"
+                  >
+                    {["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"].map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-text-dim uppercase tracking-wider mb-1">
+                    Proveedor (Opcional)
+                  </label>
+                  <select
+                    value={productForm.proveedor}
+                    onChange={(e) => setProductForm({ ...productForm, proveedor: e.target.value })}
+                    className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary focus:border-brand/50 focus:outline-none transition-colors cursor-pointer"
+                  >
+                    <option value="">Sin proveedor</option>
+                    {proveedores.map((prov) => (
+                      <option key={prov.id} value={prov.nombre}>
+                        {prov.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Imagen URL */}

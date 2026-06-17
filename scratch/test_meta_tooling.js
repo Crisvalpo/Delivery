@@ -5,7 +5,7 @@ async function runTest() {
   const secret = 'ld-bridge-mP3rL8jQsX7yWz2k';
 
   console.log('🚀 Iniciando simulación de consulta de Administrador...');
-  console.log('Mensaje: "Jaime, dame el SKU del saco de papas"');
+  console.log('Mensaje: "Jaime, dame el SKU de papas"');
 
   try {
     const res = await fetch(url, {
@@ -16,7 +16,7 @@ async function runTest() {
       },
       body: JSON.stringify({
         phone: '56935264052', // Cristian (Administrador)
-        message: 'Jaime, dame el SKU del saco de papas'
+        message: 'Jaime, dame el SKU de papas'
       })
     });
 

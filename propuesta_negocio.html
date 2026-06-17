@@ -1,0 +1,1647 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>LukeDelivery Híbrido: El Futuro del Mayorista Digital</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&display=swap"
+    rel="stylesheet">
+  <style>
+    /* ==========================================================================
+       DESIGN SYSTEM (Vanilla CSS)
+       ========================================================================== */
+    :root {
+      --bg-app: #080c14;
+      --bg-surface: #101622;
+      --bg-surface-2: #182235;
+      --bg-surface-hover: #1e2b44;
+
+      --brand: #10b981;
+      --brand-hover: #34d399;
+      --brand-dim: #065f46;
+      --brand-glow: rgba(16, 185, 129, 0.15);
+
+      --accent: #f59e0b;
+      --accent-dim: #78350f;
+      --accent-glow: rgba(245, 158, 11, 0.15);
+
+      --text-primary: #f9fafb;
+      --text-secondary: #9ca3af;
+      --text-dim: #6b7280;
+
+      --border: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(255, 255, 255, 0.15);
+      --border-brand: rgba(16, 185, 129, 0.3);
+
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+      --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      /* Smooth touch highlights on iOS */
+    }
+
+    body {
+      background-color: var(--bg-app);
+      color: var(--text-primary);
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ===== Scrollbar ===== */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg-app);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--bg-surface-2);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--bg-surface-hover);
+    }
+
+    /* ===== Layout Grid ===== */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ===== Typography ===== */
+    .title-gradient {
+      background: linear-gradient(135deg, #ffffff 30%, var(--brand-hover) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle-gradient {
+      background: linear-gradient(135deg, var(--brand) 0%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* ==========================================================================
+       COMPONENTS & SECTIONS
+       ========================================================================== */
+
+    /* ----- Header ----- */
+    header {
+      border-bottom: 1px solid var(--border);
+      background: rgba(16, 22, 34, 0.8);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 20px 0;
+    }
+
+    .header-flex {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-badge {
+      background: var(--brand);
+      color: #000;
+      font-weight: 800;
+      font-size: 14px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      letter-spacing: 1px;
+    }
+
+    .logo-text {
+      font-weight: 800;
+      font-size: 20px;
+      letter-spacing: -0.5px;
+    }
+
+    .badge-hybrid {
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ----- Hero Section ----- */
+    .hero {
+      padding: 80px 0 40px 0;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: 54px;
+      font-weight: 900;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 20px;
+    }
+
+    .hero p {
+      color: var(--text-secondary);
+      font-size: 18px;
+      max-width: 750px;
+      margin: 0 auto 40px auto;
+      font-weight: 400;
+    }
+
+    /* ----- Live Simulator Container ----- */
+    .simulator-section {
+      padding: 40px 0;
+    }
+
+    .sim-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      height: 600px;
+    }
+
+    /* Left panel: Chats */
+    .sim-sidebar {
+      background: rgba(8, 12, 20, 0.5);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sim-sidebar-header {
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sim-sidebar-header h3 {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .sim-sidebar-header p {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    .chat-tabs {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+
+    .chat-tab-btn {
+      width: 100%;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      text-align: left;
+      transition: var(--transition);
+      margin-bottom: 8px;
+    }
+
+    .chat-tab-btn:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .chat-tab-btn.active {
+      background: var(--bg-surface-2);
+      border-color: var(--border);
+    }
+
+    .avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: #000;
+      flex-shrink: 0;
+    }
+
+    .avatar.b2b {
+      background: var(--brand);
+    }
+
+    .avatar.b2c {
+      background: var(--accent);
+    }
+
+    .chat-tab-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .chat-tab-name {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text-primary);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .chat-tab-role {
+      font-size: 10px;
+      color: #000;
+      padding: 1px 6px;
+      border-radius: 6px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .chat-tab-role.b2b {
+      background: var(--brand);
+    }
+
+    .chat-tab-role.b2c {
+      background: var(--accent);
+    }
+
+    .chat-tab-msg {
+      font-size: 12px;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 4px;
+    }
+
+    /* Right panel: Chat Windows */
+    .sim-chat-window {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      background: radial-gradient(circle at top right, rgba(16, 185, 129, 0.03), transparent 40%),
+        radial-gradient(circle at bottom left, rgba(245, 158, 11, 0.03), transparent 40%);
+    }
+
+    .chat-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(16, 22, 34, 0.4);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .chat-header-user {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .chat-status {
+      font-size: 12px;
+      color: var(--brand);
+      font-weight: 600;
+    }
+
+    .chat-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .msg {
+      max-width: 75%;
+      padding: 14px 18px;
+      border-radius: 18px;
+      font-size: 14px;
+      position: relative;
+      animation: fadeIn 0.4s ease forwards;
+    }
+
+    .msg.incoming {
+      background: var(--bg-surface-2);
+      align-self: flex-start;
+      border-top-left-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    .msg.outgoing {
+      background: var(--brand-dim);
+      color: var(--text-primary);
+      align-self: flex-end;
+      border-top-right-radius: 4px;
+      border: 1px solid var(--border-brand);
+    }
+
+    .msg.outgoing.b2c {
+      background: #78350f;
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+
+    .msg.outgoing.staff {
+      background: #581c87;
+      border-color: rgba(168, 85, 247, 0.3);
+    }
+
+    .msg-time {
+      font-size: 10px;
+      color: var(--text-dim);
+      display: block;
+      margin-top: 6px;
+      text-align: right;
+    }
+
+    .link-box {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 12px;
+      margin-top: 10px;
+      cursor: pointer;
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .link-box:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .link-box-left {
+      min-width: 0;
+    }
+
+    .link-box-title {
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--brand-hover);
+    }
+
+    .link-box-title.b2c {
+      color: var(--accent);
+    }
+
+    .link-box-desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .link-icon {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 8px;
+      border-radius: 50%;
+      color: var(--text-primary);
+    }
+
+    .chat-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      background: rgba(16, 22, 34, 0.4);
+      display: flex;
+      gap: 12px;
+    }
+
+    .chat-input {
+      flex: 1;
+      background: var(--bg-surface-2);
+      border: 1px solid var(--border);
+      border-radius: 30px;
+      padding: 12px 20px;
+      color: var(--text-primary);
+      font-family: inherit;
+      outline: none;
+      font-size: 14px;
+      transition: var(--transition);
+    }
+
+    .chat-input:focus {
+      border-color: var(--brand);
+    }
+
+    .chat-input.b2c:focus {
+      border-color: var(--accent);
+    }
+
+    .chat-send-btn {
+      background: var(--brand);
+      color: #000;
+      border: none;
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      transition: var(--transition);
+    }
+
+    .chat-send-btn:hover {
+      transform: scale(1.05);
+      background: var(--brand-hover);
+    }
+
+    .chat-send-btn.b2c {
+      background: var(--accent);
+    }
+
+    .chat-send-btn.b2c:hover {
+      background: #fbbf24;
+    }
+
+    /* ----- Highlights Audio Section ----- */
+    .audio-highlight-section {
+      padding: 60px 0;
+      background: linear-gradient(180deg, var(--bg-app) 0%, rgba(16, 185, 129, 0.04) 50%, var(--bg-app) 100%);
+      border-y: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .audio-badge {
+      background: var(--brand-glow);
+      color: var(--brand-hover);
+      border: 1px solid var(--border-brand);
+      padding: 6px 14px;
+      border-radius: 30px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .audio-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      text-align: left;
+      margin-top: 40px;
+    }
+
+    .audio-text-box h4 {
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 16px;
+    }
+
+    .audio-text-box p {
+      color: var(--text-secondary);
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    /* ----- Map & Options Section ----- */
+    .map-section {
+      padding: 80px 0;
+      text-align: center;
+    }
+
+    .map-wrapper {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 20px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      margin-top: 30px;
+      position: relative;
+    }
+
+    .map-screenshot {
+      width: 100%;
+      height: auto;
+      max-height: 520px;
+      object-fit: cover;
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      display: block;
+      transition: var(--transition);
+    }
+
+    .map-screenshot:hover {
+      transform: scale(1.005);
+      box-shadow: 0 0 30px rgba(16, 185, 129, 0.1);
+    }
+
+    .map-options-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+      margin-top: 40px;
+      text-align: left;
+    }
+
+    .map-option-card {
+      background: var(--bg-surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      transition: var(--transition);
+    }
+
+    .map-option-card:hover {
+      border-color: var(--border-brand);
+      transform: translateY(-2px);
+    }
+
+    .map-option-card h5 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--brand-hover);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .map-option-card p {
+      font-size: 13.5px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* ----- Rules & Split Grid ----- */
+    .grid-section {
+      padding: 60px 0;
+    }
+
+    .section-title {
+      font-size: 32px;
+      font-weight: 800;
+      margin-bottom: 40px;
+      text-align: center;
+      letter-spacing: -0.5px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+
+    .business-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 36px;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .business-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+    }
+
+    .business-card.b2b::before {
+      background: var(--brand);
+    }
+
+    .business-card.b2c::before {
+      background: var(--accent);
+    }
+
+    .business-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--border-hover);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .card-title {
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .card-badge {
+      padding: 4px 12px;
+      border-radius: 30px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .card-badge.b2b {
+      background: var(--brand-glow);
+      color: var(--brand-hover);
+      border: 1px solid var(--border-brand);
+    }
+
+    .card-badge.b2c {
+      background: var(--accent-glow);
+      color: var(--accent);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .rules-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .rules-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 15px;
+      color: var(--text-secondary);
+    }
+
+    .rules-list li strong {
+      color: var(--text-primary);
+    }
+
+    .bullet-icon {
+      color: var(--brand);
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+
+    .bullet-icon.b2c {
+      color: var(--accent);
+    }
+
+    /* ----- Differentiation Section ----- */
+    .diff-section {
+      padding: 60px 0;
+      background: rgba(16, 22, 34, 0.3);
+      border-y: 1px solid var(--border);
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .diff-card {
+      background: var(--bg-app);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 30px;
+      transition: var(--transition);
+    }
+
+    .diff-card:hover {
+      border-color: var(--brand-hover);
+      transform: translateY(-4px);
+    }
+
+    .diff-icon {
+      background: var(--brand-glow);
+      color: var(--brand-hover);
+      width: 50px;
+      height: 50px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+
+    .diff-card h4 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .diff-card p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* ----- Future Possibilities ----- */
+    .future-section {
+      padding: 80px 0;
+      text-align: center;
+    }
+
+    .timeline-container {
+      max-width: 800px;
+      margin: 50px auto 0 auto;
+      text-align: left;
+      position: relative;
+      padding-left: 32px;
+      border-left: 2px solid var(--border);
+    }
+
+    .timeline-item {
+      position: relative;
+      margin-bottom: 40px;
+    }
+
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -41px;
+      top: 6px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--bg-app);
+      border: 4px solid var(--brand);
+    }
+
+    .timeline-item.accent::before {
+      border-color: var(--accent);
+    }
+
+    .timeline-item h4 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .timeline-item p {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    /* ----- Footer Pitch ----- */
+    .pitch-footer {
+      padding: 80px 0;
+      text-align: center;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.08) 0%, transparent 70%);
+      border-top: 1px solid var(--border);
+    }
+
+    .pitch-footer h2 {
+      font-size: 36px;
+      font-weight: 800;
+      margin-bottom: 20px;
+    }
+
+    .pitch-footer p {
+      color: var(--text-secondary);
+      max-width: 650px;
+      margin: 0 auto 30px auto;
+    }
+
+    .btn-primary {
+      background: var(--brand);
+      color: #000;
+      padding: 16px 36px;
+      border-radius: 30px;
+      font-weight: 700;
+      text-decoration: none;
+      font-size: 16px;
+      display: inline-block;
+      transition: var(--transition);
+      box-shadow: 0 10px 30px var(--brand-glow);
+    }
+
+    .btn-primary:hover {
+      background: var(--brand-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 15px 40px rgba(16, 185, 129, 0.3);
+    }
+
+    /* ===== Keyframes ===== */
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ==========================================================================
+       IPHONE / MOBILE RESPONSIVE OPTIMIZATIONS
+       ========================================================================== */
+    @media (max-width: 900px) {
+      .container {
+        padding: 0 16px;
+      }
+
+      .hero {
+        padding: 40px 0 20px 0;
+      }
+
+      .hero h1 {
+        font-size: 30px;
+        letter-spacing: -0.8px;
+        line-height: 1.15;
+      }
+
+      .hero p {
+        font-size: 14.5px;
+        margin-bottom: 28px;
+      }
+
+      .hero div[style*="display: flex"] {
+        flex-direction: column !important;
+        align-items: center !important;
+        gap: 10px !important;
+        margin: 20px auto !important;
+      }
+
+      .hero div[style*="background: rgba"] {
+        width: 100% !important;
+        max-width: 320px !important;
+        justify-content: center !important;
+        padding: 10px 18px !important;
+        font-size: 12.5px !important;
+      }
+
+      /* Simulator Horizontal Tabs layout for iPhone screen width */
+      .sim-card {
+        grid-template-columns: 1fr;
+        height: auto;
+        border-radius: var(--radius-lg);
+      }
+
+      .sim-sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        height: auto;
+        padding: 8px;
+        background: rgba(8, 12, 20, 0.7);
+      }
+
+      .sim-sidebar-header {
+        display: none;
+        /* Hide header to save valuable vertical screen space on iPhone */
+      }
+
+      .chat-tabs {
+        display: flex;
+        flex-direction: row;
+        overflow-x: auto;
+        gap: 6px;
+        padding: 4px;
+        scrollbar-width: none;
+      }
+
+      .chat-tabs::-webkit-scrollbar {
+        display: none;
+        /* Hide Chrome/Safari scrollbar */
+      }
+
+      .chat-tab-btn {
+        flex: 1 0 auto;
+        width: auto;
+        margin-bottom: 0;
+        padding: 8px 12px;
+        gap: 6px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .chat-tab-btn.active {
+        background: var(--bg-surface-2);
+        border-color: var(--border-brand);
+      }
+
+      .avatar {
+        width: 24px;
+        height: 24px;
+        font-size: 12px;
+      }
+
+      .chat-tab-info {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .chat-tab-name {
+        font-size: 12.5px;
+        white-space: nowrap;
+      }
+
+      .chat-tab-role {
+        font-size: 8.5px;
+        padding: 1px 4.5px;
+        border-radius: 4px;
+      }
+
+      .chat-tab-msg {
+        display: none;
+        /* Hide msg snippet on mobile for clean horizontal tabs */
+      }
+
+      /* Chat Window inside simulator */
+      .sim-chat-window {
+        height: 440px;
+        /* Reduced height to fit iPhone screen aspect ratios */
+      }
+
+      .chat-header {
+        padding: 12px 16px;
+      }
+
+      .chat-header-user h4 {
+        font-size: 13.5px;
+      }
+
+      .chat-body {
+        padding: 14px;
+        gap: 10px;
+      }
+
+      .msg {
+        max-width: 88%;
+        padding: 10px 14px;
+        font-size: 13px;
+        border-radius: 16px;
+      }
+
+      /* Sections & Grid Layouts */
+      .section-title {
+        font-size: 24px;
+        margin-bottom: 20px;
+      }
+
+      .grid-2 {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .business-card {
+        padding: 20px;
+        border-radius: var(--radius-lg);
+      }
+
+      .card-title {
+        font-size: 17px;
+      }
+
+      .rules-list {
+        gap: 12px;
+      }
+
+      .rules-list li {
+        font-size: 13.5px;
+      }
+
+      .grid-3 {
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+
+      .diff-card {
+        padding: 20px;
+      }
+
+      .diff-card h4 {
+        font-size: 16px;
+      }
+
+      .diff-card p {
+        font-size: 13px;
+      }
+
+      /* Audio highlights */
+      .audio-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      .audio-text-box h4 {
+        font-size: 19px;
+      }
+
+      .audio-text-box p {
+        font-size: 13.5px;
+        margin-bottom: 12px;
+      }
+
+      /* Map showcase */
+      .map-wrapper {
+        padding: 8px;
+        border-radius: var(--radius-lg);
+      }
+
+      .map-screenshot {
+        max-height: 250px;
+      }
+
+      .map-options-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .map-option-card {
+        padding: 16px;
+      }
+
+      .map-option-card h5 {
+        font-size: 14.5px;
+      }
+
+      .map-option-card p {
+        font-size: 12.5px;
+      }
+
+      /* Footer Pitch */
+      .pitch-footer h2 {
+        font-size: 26px;
+      }
+
+      .pitch-footer p {
+        font-size: 14px;
+      }
+
+      .pitch-footer div[style*="display: inline-flex"] {
+        flex-direction: column !important;
+        gap: 16px !important;
+        width: 100% !important;
+        padding: 16px !important;
+      }
+
+      .pitch-footer div[style*="width: 1px"] {
+        display: none !important;
+      }
+
+      .pitch-footer div[style*="text-align: left"] {
+        text-align: center !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="container header-flex">
+      <div class="logo-container">
+        <div class="logo-badge">LD</div>
+        <span class="logo-text">LukeDelivery <span class="badge-hybrid">Híbrido</span></span>
+      </div>
+      <div>
+        <span style="font-size: 13px; font-weight: 600; color: var(--brand-hover);">PROPUESTA LOGÍSTICA &
+          E-COMMERCE</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO -->
+    <section class="hero">
+      <div class="container">
+        <span
+          style="font-size: 14px; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: 2px;">Oportunidad
+          de Negocio Mayorista</span>
+        <h1 class="title-gradient">El Mayorista Digital de Última Milla</h1>
+
+        <!-- PITCH HOOKS -->
+        <div
+          style="display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; margin: 30px auto; max-width: 900px;">
+          <div
+            style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.15); padding: 12px 24px; border-radius: 30px; font-size: 14px; font-weight: 700; color: #f87171; display: flex; align-items: center; gap: 8px;">
+            <span>⚠️</span> ¿Aún no tienes un servicio de delivery formalizado?
+          </div>
+          <div
+            style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.15); padding: 12px 24px; border-radius: 30px; font-size: 14px; font-weight: 700; color: #f87171; display: flex; align-items: center; gap: 8px;">
+            <span>💸</span> ¿Las aplicaciones tradicionales te cobran demasiada comisión?
+          </div>
+        </div>
+
+        <p>Cómo transformar una bodega distribuidora tradicional en un canal de alta frecuencia y rentabilidad,
+          vendiendo al almacén (B2B) y directamente a hogares (B2C) sin comisiones externas y con una logística
+          auto-financiada.</p>
+        <a href="#simulator" class="btn-primary">Ver Simulador de Interacción</a>
+      </div>
+    </section>
+
+    <!-- LIVE SIMULATOR -->
+    <section class="simulator-section" id="simulator">
+      <div class="container">
+        <h2 class="section-title">Ejemplo de Flujo Automático de WhatsApp</h2>
+        <p
+          style="text-align: center; color: var(--text-secondary); max-width: 600px; margin: -20px auto 40px auto; font-size: 15px;">
+          Haz clic en las pestañas del panel izquierdo para simular cómo el asistente IA "Jaime" atiende de forma
+          inteligente y diferenciada a un almacenero B2B, a un vecino B2C, o ayuda al personal (Staff) por notas de voz.
+        </p>
+
+        <div class="sim-card">
+          <!-- Sidebar -->
+          <div class="sim-sidebar">
+            <div class="sim-sidebar-header">
+              <h3>Conversaciones</h3>
+              <p>Bot Virtual Activo</p>
+            </div>
+            <div class="chat-tabs">
+              <!-- Tab 1: B2B -->
+              <button class="chat-tab-btn active" onclick="switchChat('b2b')">
+                <div class="avatar b2b">🏪</div>
+                <div class="chat-tab-info">
+                  <div class="chat-tab-name">
+                    Don Tito <span class="chat-tab-role b2b">B2B</span>
+                  </div>
+                  <div class="chat-tab-msg" id="tab-msg-b2b">"Jaime, quiero hacer un pedido..."</div>
+                </div>
+              </button>
+              <!-- Tab 2: B2C -->
+              <button class="chat-tab-btn" onclick="switchChat('b2c')">
+                <div class="avatar b2c">🏡</div>
+                <div class="chat-tab-info">
+                  <div class="chat-tab-name">
+                    María <span class="chat-tab-role b2c">B2C</span>
+                  </div>
+                  <div class="chat-tab-msg" id="tab-msg-b2c">"Hola, ¿tienen pan y verduras?"</div>
+                </div>
+              </button>
+              <!-- Tab 3: Staff (Carlos) -->
+              <button class="chat-tab-btn" onclick="switchChat('staff')">
+                <div class="avatar staff" style="background: #a855f7; color: #fff;">💼</div>
+                <div class="chat-tab-info">
+                  <div class="chat-tab-name">
+                    Carlos <span class="chat-tab-role staff"
+                      style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);">STAFF</span>
+                  </div>
+                  <div class="chat-tab-msg" id="tab-msg-staff">"Jaime, agrega al catálogo..."</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Chat Window -->
+          <div class="sim-chat-window">
+            <div class="chat-header">
+              <div class="chat-header-user">
+                <div class="avatar b2b" id="chat-header-avatar">🏪</div>
+                <div>
+                  <h4 id="chat-header-name" style="font-size: 15px; font-weight: 700;">Almacén Don Tito</h4>
+                  <span class="chat-status">● Jaime en línea (IA)</span>
+                </div>
+              </div>
+              <span id="chat-header-badge" class="card-badge b2b">Canal Mayorista</span>
+            </div>
+
+            <!-- Chat Content -->
+            <div class="chat-body" id="chat-messages">
+              <!-- Messages generated by JS -->
+            </div>
+
+            <!-- Chat Footer -->
+            <div class="chat-footer">
+              <input type="text" class="chat-input" id="chat-input-field" placeholder="Jaime está respondiendo..."
+                readonly>
+              <button class="chat-send-btn" id="chat-send-btn-el" disabled>▶</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- HIGHLIGHT SECTION: AUDIO MULTIMODAL -->
+    <section class="audio-highlight-section">
+      <div class="container">
+        <div class="audio-badge">
+          <span>🎙️</span> Inteligencia de Voz Activa (Multimodal)
+        </div>
+        <div class="audio-grid">
+          <div class="audio-text-box">
+            <h4>El cliente habla, Jaime entiende</h4>
+            <p>
+              Muchos dueños de almacenes están ocupados atendiendo a su propio público y prefieren enviar una nota de
+              voz corta en lugar de escribir un mensaje de texto.
+              Nuestro bot **Jaime** está equipado con inteligencia de transcripción y síntesis de voz:
+            </p>
+            <p>
+              Escucha y procesa los audios de los clientes y les responde con voz sintetizada (TTS) en español chileno.
+              Hace que la compra B2B sea tan sencilla como hablar por teléfono con un amigo.
+            </p>
+          </div>
+          <div class="audio-text-box">
+            <h4>Administración del catálogo por Notas de Voz</h4>
+            <p>
+              Los trabajadores (Staff) y el dueño de la bodega no necesitan abrir planillas ni paneles complejos en
+              terreno para actualizar el catálogo.
+              Basta con enviarle una nota de voz al bot:
+            </p>
+            <p
+              style="background: rgba(255,255,255,0.03); border: 1px dashed var(--border); padding: 16px; border-radius: var(--radius-lg); font-style: italic; font-size: 14px; color: var(--brand-hover);">
+              🎙️ "Jaime, agrega al catálogo: Saco de Papas 25kg, categoría pesado, costo de mayorista 10.000 pesos."
+            </p>
+            <p style="margin-top: 10px;">
+              El sistema procesa el audio, calcula el precio de venta agregando el margen sugerido, lo añade a la base
+              de datos de Supabase y responde confirmando la creación.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MAP SHOWCASE -->
+    <section class="map-section">
+      <div class="container">
+        <span
+          style="font-size: 13px; font-weight: 800; color: var(--brand); text-transform: uppercase; letter-spacing: 2.5px;">Panel
+          de Control Administrativo</span>
+        <h2 style="font-size: 36px; font-weight: 800; margin-top: 10px;">Mapeo Territorial y Logística de Rutas</h2>
+        <p style="color: var(--text-secondary); max-width: 700px; margin: 10px auto 0 auto; font-size: 16px;">
+          Nuestra consola central ofrece control total e interactivo en tiempo real sobre la distribución física en
+          Placilla de Peñuelas y Curauma.
+        </p>
+
+        <div class="map-wrapper">
+          <img src="mapa_entregas.png" alt="Dashboard del Mapa de Rutas de Entrega" class="map-screenshot">
+        </div>
+
+        <div class="map-options-grid">
+          <!-- Card 1 -->
+          <div class="map-option-card">
+            <h5>📍 Geolocalización de Almacenes</h5>
+            <p>Cada local registrado aparece en el mapa con un marcador de color según su prioridad territorial (Alta,
+              Media o Baja) facilitando el diseño lógico de las entregas diarias.</p>
+          </div>
+          <!-- Card 2 -->
+          <div class="map-option-card">
+            <h5>⚙️ Modificar Ubicación Directa</h5>
+            <p>El botón **"Ajustar Ubicación"** permite al administrador arrastrar y soltar las coordenadas de cualquier
+              cliente registrado para corregir la ubicación exacta del despacho.</p>
+          </div>
+          <!-- Card 3 -->
+          <div class="map-option-card">
+            <h5>🛒 Consolidado de Compras Mayoristas</h5>
+            <p>El botón **"Lista Compras"** genera de forma instantánea el consolidado neto de mercadería exacta a
+              comprar a los proveedores, eliminando el sobrestock y optimizando el capital.</p>
+          </div>
+          <!-- Card 4 -->
+          <div class="map-option-card">
+            <h5>🚐 Ruta del Día para el Repartidor</h5>
+            <p>El botón **"Ruta del Día"** genera una vista móvil simplificada con GPS y enlaces rápidos de contacto de
+              WhatsApp para el chofer del vehículo repartidor en terreno.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BUSINESS RULES -->
+    <section class="grid-section">
+      <div class="container">
+        <h2 class="section-title">Estructura del Negocio Híbrido</h2>
+        <div class="grid-2">
+          <!-- B2B Card -->
+          <div class="business-card b2b">
+            <div class="card-header">
+              <h3 class="card-title">Canal Almacenes (B2B)</h3>
+              <span class="card-badge b2b">Volumen</span>
+            </div>
+            <ul class="rules-list">
+              <li>
+                <span class="bullet-icon">✓</span>
+                <span><strong>Margen Comercial:</strong> Bajo y muy competitivo (15% - 20% sobre el costo
+                  mayorista).</span>
+              </li>
+              <li>
+                <span class="bullet-icon">✓</span>
+                <span><strong>Formato de Venta:</strong> Exclusivamente bultos (cajas completas, mallas, sacos).</span>
+              </li>
+              <li>
+                <span class="bullet-icon">✓</span>
+                <span><strong>Pedido Mínimo:</strong> Elevado ($35.000 CLP) para asegurar la viabilidad del
+                  transporte.</span>
+              </li>
+              <li>
+                <span class="bullet-icon">✓</span>
+                <span><strong>Flete Escalonado:</strong> Tarifa base de $3.000 + recargo de $500 por bulto pesado
+                  (fomenta la transparencia y autofinancia el vehículo).</span>
+              </li>
+            </ul>
+          </div>
+
+          <!-- B2C Card -->
+          <div class="business-card b2c">
+            <div class="card-header">
+              <h3 class="card-title">Canal Hogares (B2C)</h3>
+              <span class="card-badge b2c">Margen</span>
+            </div>
+            <ul class="rules-list">
+              <li>
+                <span class="bullet-icon b2c">✓</span>
+                <span><strong>Margen Comercial:</strong> Alto y rentable (35% - 45% sobre costo), inferior al
+                  supermercado de la zona.</span>
+              </li>
+              <li>
+                <span class="bullet-icon b2c">✓</span>
+                <span><strong>Formato de Venta:</strong> Unidades individuales (Ideal para despensa familiar y compras
+                  semanales).</span>
+              </li>
+              <li>
+                <span class="bullet-icon b2c">✓</span>
+                <span><strong>Pedido Mínimo:</strong> Accesible ($15.000 CLP) para incentivar compras constantes del
+                  hogar.</span>
+              </li>
+              <li>
+                <span class="bullet-icon b2c">✓</span>
+                <span><strong>Flete Consolidado:</strong> $2.000 fijo o Gratis por compras sobre $30.000 CLP (entrega en
+                  la misma ruta del B2B).</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DIFFERENTIATION -->
+    <section class="diff-section">
+      <div class="container">
+        <h2 class="section-title">Nuestra Ventaja Competitiva</h2>
+        <div class="grid-3">
+          <!-- Card 1 -->
+          <div class="diff-card">
+            <div class="diff-icon">🤖</div>
+            <h4>Automatización 100% por IA</h4>
+            <p>La competencia tiene ejércitos de vendedores leyendo audios y textos en WhatsApp de forma lenta y manual.
+              LukeDelivery responde en 3 segundos con stock exacto, audios y links interactivos a cualquier hora.</p>
+          </div>
+          <!-- Card 2 -->
+          <div class="diff-card">
+            <div class="diff-icon">📦</div>
+            <h4>Cross-Docking de Frescos</h4>
+            <p>Vender frutas y verduras sin asumir merma o pudrición en bodega. El sistema consolida los pedidos
+              cerrados y te dice exactamente qué comprar al productor local en la mañana del despacho. Stock real de
+              perecederos: cero.</p>
+          </div>
+          <!-- Card 3 -->
+          <div class="diff-card">
+            <div class="diff-icon">🚐</div>
+            <h4>Rutas de Alta Densidad</h4>
+            <p>Mezclamos almacenes y condominios en la misma ruta geográfica. Mientras el camión viaja a dejar $100.000
+              a un local B2B, entrega en el camino $30.000 a un hogar B2C, logrando rentabilidad exponencial por
+              kilómetro.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FUTURE POSSIBILITIES -->
+    <section class="future-section">
+      <div class="container">
+        <h2 class="section-title">Futuro y Posibilidades de Crecimiento</h2>
+        <div class="timeline-container">
+          <div class="timeline-item">
+            <h4>📈 1. Expansión a Marcas Propias de Terceros</h4>
+            <p>Abrir la plataforma a productores locales (huevos de campo, pan artesanal, queserías). Ellos publican en
+              tu catálogo digital y tú actúas como el distribuidor de última milla a cambio de una comisión directa.</p>
+          </div>
+          <div class="timeline-item accent">
+            <h4>🏢 2. Compras Grupales en Condominios</h4>
+            <p>Despachos B2C agrupados: si un condominio junta 5 pedidos en una ventana, el flete es gratis. Esto crea
+              fidelización comunitaria y baja los costos de entrega a un único punto de parada.</p>
+          </div>
+          <div class="timeline-item">
+            <h4>💡 3. Financiamiento e Inteligencia B2B</h4>
+            <p>Con el historial de compras consolidado por Supabase, se puede ofrecer microcrédito o financiamiento de
+              mercadería a los almacenes que demuestren excelente comportamiento de pago directo en la app.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FOOTER PITCH FOR PARTNERSHIP -->
+    <section class="pitch-footer">
+      <div class="container" style="max-width: 850px;">
+        <h2 class="subtitle-gradient" style="font-size: 40px; margin-bottom: 24px; font-weight: 900;">Una Alianza de
+          Alto Valor</h2>
+        <p style="font-size: 17px; margin-bottom: 40px; line-height: 1.7; color: var(--text-secondary);">
+          La combinación de infraestructura mayorista tradicional con un canal de atención inteligente nos permite
+          llegar a cientos de almaceneros y hogares en Placilla y Curauma de forma eficiente, económica y scalable. Te
+          propongo que implementemos un piloto de 2 semanas y evaluemos juntos el impacto.
+        </p>
+        <div
+          style="background: var(--bg-surface-2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; display: inline-flex; flex-wrap: wrap; gap: 40px; justify-content: center; align-items: center; text-align: left;">
+          <div>
+            <span
+              style="display: block; font-size: 11px; text-transform: uppercase; color: var(--text-dim); font-weight: 800; letter-spacing: 1.5px;">Propuesta
+              Tecnológica</span>
+            <span
+              style="display: block; font-size: 16px; font-weight: 700; color: var(--brand-hover); margin-top: 4px;">Cristian
+              Luke Cabello</span>
+          </div>
+          <div style="width: 1px; height: 40px; background: var(--border); display: block;"></div>
+          <div>
+            <span
+              style="display: block; font-size: 11px; text-transform: uppercase; color: var(--text-dim); font-weight: 800; letter-spacing: 1.5px;">Canal
+              Híbrido</span>
+            <span
+              style="display: block; font-size: 16px; font-weight: 700; color: var(--text-primary); margin-top: 4px;">LukeDelivery
+              B2B & B2C</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    /* ==========================================================================
+       CONVERSATION SIMULATOR DATA & LOGIC
+       ========================================================================== */
+    const conversations = {
+      b2b: [
+        { sender: 'user', text: 'Hola Jaime, soy Héctor del Almacén Don Tito. Quiero hacer un pedido porfa.', time: '10:41' },
+        { sender: 'bot', text: '¡Hola Don Héctor! Qué gusto saludarlo. 🏪 Ya abrimos la toma de pedidos para la ventana de despacho de mañana. Aquí tiene su enlace seguro para armar el carro con precios al costo real. El link expira en 2 horas:', time: '10:41', link: { title: 'Ver Catálogo Mayorista - Don Tito', desc: 'Precios de costo neto en cajas, sacos y packs', type: 'b2b' } },
+        { sender: 'user', text: 'Genial. Oye ¿a cuánto tienes la malla de papas hoy?', time: '10:42' },
+        { sender: 'bot', text: 'La malla de papas de 25kg está a $10.000 neto (costo de furgón pesado de $500 por saco). Recuerde que al sumar abarrotes y fideos en su carrito, el flete base de $3.000 se prorratea y le sale muy a cuenta. ¡Escriba "pedido" si quiere el link de nuevo!', time: '10:42' }
+      ],
+      b2c: [
+        { sender: 'user', text: 'Hola, soy vecina del condominio Lomas de Curauma. ¿Puedo encargarles mercadería para la casa? ¿Tienen verduras y pan?', time: '10:44' },
+        { sender: 'bot', text: '¡Hola María! Sí, por supuesto. 😊 Hacemos despachos directos a hogares en Curauma. Tenemos un catálogo especial para la despensa familiar que incluye pan de masa madre fresco y verduras seleccionadas del día. Le dejo el link para comprar al detalle de forma cómoda:', time: '10:44', link: { title: 'Despensa Familiar LukeDelivery', desc: 'Abarrotes por unidad, pan artesanal y verdulería fresca', type: 'b2c' } },
+        { sender: 'user', text: '¿Cuánto cobran por el despacho al condominio?', time: '10:45' },
+        { sender: 'bot', text: 'Para hogares en Curauma la tarifa de despacho es de $2.000 fijo. ¡Pero si su pedido supera los $30.000, el despacho es totalmente GRATIS! Repartimos mañana durante la tarde.', time: '10:45' }
+      ],
+      staff: [
+        { sender: 'user', text: '🎙️ Nota de voz (Carlos): "Jaime, agrega al catálogo: Pack Fideos 20 unidades, costo 14000 pesos, categoría estándar"', time: '11:02' },
+        { sender: 'bot', text: '🎙️ ¡Hola Carlos! Entendido. 🍝 Registré el Pack de Fideos (20 unidades) en el catálogo de ofertas. El costo es de $14.000 y el precio de venta sugerido es de $16.800 (calculado automáticamente agregando el 20% de margen). La imagen por defecto fue asignada.', time: '11:02' },
+        { sender: 'user', text: '🎙️ Nota de voz (Carlos): "Jaime, el fideos está sin stock por ahora, deshabilítalo"', time: '11:03' },
+        { sender: 'bot', text: '🎙️ ¡Listo Carlos! Marqué la disponibilidad del Pack de Fideos como Agotado. Ya no aparecerá para la compra en la aplicación de los clientes.', time: '11:03' }
+      ]
+    };
+
+    let activeChat = 'b2b';
+    let timeoutIds = [];
+
+    function switchChat(chatId) {
+      activeChat = chatId;
+
+      // Clear any pending stagger message animations
+      timeoutIds.forEach(id => clearTimeout(id));
+      timeoutIds = [];
+
+      // Update tabs active classes
+      const tabs = document.querySelectorAll('.chat-tab-btn');
+      tabs.forEach(tab => tab.classList.remove('active'));
+
+      // Find the tab element directly
+      let activeTab = null;
+      if (chatId === 'b2b') {
+        activeTab = tabs[0];
+      } else if (chatId === 'b2c') {
+        activeTab = tabs[1];
+      } else if (chatId === 'staff') {
+        activeTab = tabs[2];
+      }
+
+      if (activeTab) {
+        activeTab.classList.add('active');
+      }
+
+      // Update header DOM elements
+      const avatar = document.getElementById('chat-header-avatar');
+      const name = document.getElementById('chat-header-name');
+      const badge = document.getElementById('chat-header-badge');
+      const input = document.getElementById('chat-input-field');
+      const sendBtn = document.getElementById('chat-send-btn-el');
+
+      if (chatId === 'b2b') {
+        avatar.className = 'avatar b2b';
+        avatar.style.background = 'var(--brand)';
+        avatar.style.color = '#000';
+        avatar.innerHTML = '🏪';
+        name.innerText = 'Almacén Don Tito';
+        badge.className = 'card-badge b2b';
+        badge.innerText = 'Canal Mayorista';
+        badge.style.background = 'var(--brand-glow)';
+        badge.style.color = 'var(--brand-hover)';
+        badge.style.border = '1px solid var(--border-brand)';
+        input.className = 'chat-input';
+        sendBtn.className = 'chat-send-btn';
+        sendBtn.style.background = 'var(--brand)';
+      } else if (chatId === 'b2c') {
+        avatar.className = 'avatar b2c';
+        avatar.style.background = 'var(--accent)';
+        avatar.style.color = '#000';
+        avatar.innerHTML = '🏡';
+        name.innerText = 'María (Curauma)';
+        badge.className = 'card-badge b2c';
+        badge.innerText = 'Canal Hogares';
+        badge.style.background = 'var(--accent-glow)';
+        badge.style.color = 'var(--accent)';
+        badge.style.border = '1px solid rgba(245, 158, 11, 0.3)';
+        input.className = 'chat-input b2c';
+        sendBtn.className = 'chat-send-btn b2c';
+        sendBtn.style.background = 'var(--accent)';
+      } else if (chatId === 'staff') {
+        avatar.className = 'avatar staff';
+        avatar.style.background = '#a855f7';
+        avatar.style.color = '#fff';
+        avatar.innerHTML = '💼';
+        name.innerText = 'Carlos (Personal)';
+        badge.className = 'card-badge staff';
+        badge.innerText = 'Canal Interno (Staff)';
+        badge.style.background = 'rgba(168, 85, 247, 0.2)';
+        badge.style.color = '#c084fc';
+        badge.style.border = '1px solid rgba(168, 85, 247, 0.3)';
+        input.className = 'chat-input';
+        sendBtn.className = 'chat-send-btn';
+        sendBtn.style.background = '#a855f7';
+      }
+
+      renderMessages();
+    }
+
+    function renderMessages() {
+      const messagesContainer = document.getElementById('chat-messages');
+      messagesContainer.innerHTML = '';
+
+      const msgs = conversations[activeChat];
+      msgs.forEach((msg, index) => {
+        const id = setTimeout(() => {
+          const msgDiv = document.createElement('div');
+          const isIncoming = msg.sender === 'user';
+          let stateClass = '';
+          if (!isIncoming) {
+            if (activeChat === 'b2c') stateClass = 'b2c';
+            else if (activeChat === 'staff') stateClass = 'staff';
+          }
+          msgDiv.className = `msg ${isIncoming ? 'incoming' : 'outgoing'} ${stateClass}`;
+
+          let content = `<p>${msg.text}</p>`;
+
+          if (msg.link) {
+            content += `
+              <div class="link-box" onclick="alert('Abriendo catálogo simulado: ${msg.link.title}')">
+                <div class="link-box-left">
+                  <div class="link-box-title ${msg.link.type === 'b2c' ? 'b2c' : ''}">${msg.link.title}</div>
+                  <div class="link-box-desc">${msg.link.desc}</div>
+                </div>
+                <div class="link-icon">➔</div>
+              </div>
+            `;
+          }
+
+          content += `<span class="msg-time">${msg.time}</span>`;
+          msgDiv.innerHTML = content;
+          messagesContainer.appendChild(msgDiv);
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }, index * 400); // Stagger message rendering for realistic chat simulation
+        timeoutIds.push(id);
+      });
+    }
+
+    // Initial load
+    window.onload = () => {
+      renderMessages();
+    };
+  </script>
+</body>
+
+</html>

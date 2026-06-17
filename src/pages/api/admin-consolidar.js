@@ -41,7 +41,10 @@ export default async function handler(req, res) {
           estado,
           productos (
             nombre,
-            formato_venta
+            formato_venta,
+            venta_multiplo,
+            unidades_embalaje,
+            proveedor
           ),
           pedidos!inner (
             estado,
@@ -64,6 +67,9 @@ export default async function handler(req, res) {
             producto_id: it.producto_id,
             nombre: prod.nombre,
             formato_venta: prod.formato_venta,
+            venta_multiplo: prod.venta_multiplo,
+            unidades_embalaje: prod.unidades_embalaje,
+            proveedor: prod.proveedor || "Sin Proveedor",
             cantidad_total: 0,
             estado: it.estado,
           };

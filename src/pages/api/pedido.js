@@ -4,6 +4,53 @@ const MONTO_MINIMO = 35000;
 const FLETE_BASE = 3000;
 const RECARGO_PESADO = 500;
 
+function obtenerDesglose(Q, E, M) {
+  if (!E && !M) {
+    return { cajas: 0, packs: 0, unidades: Q };
+  }
+  if (E && !M) {
+    const cajas = Math.floor(Q / E);
+    const unidades = Q % E;
+    return { cajas, packs: 0, unidades };
+  }
+  if (!E && M) {
+    const packs = Math.floor(Q / M);
+    const unidades = Q % M;
+    return { cajas: 0, packs, unidades };
+  }
+  
+  let cajas = Math.floor(Q / E);
+  let resto = Q - (cajas * E);
+  
+  while (cajas > 0 && resto % M !== 0) {
+    cajas--;
+    resto = Q - (cajas * E);
+  }
+  
+  const packs = Math.floor(resto / M);
+  const unidades = resto % M;
+  
+  return { cajas, packs, unidades };
+}
+
+function calcularPrecioTotalItem(Q, p) {
+  const E = p.unidades_embalaje;
+  const M = p.venta_multiplo || 1;
+  const precioUnitario = p.precio;
+  const precioCajaUnitario = p.precio_embalaje_unidad !== null && p.precio_embalaje_unidad !== undefined 
+    ? p.precio_embalaje_unidad 
+    : p.precio;
+  
+  const { cajas, packs, unidades } = obtenerDesglose(Q, E, M);
+  
+  const totalCajas = cajas * E * precioCajaUnitario;
+  const totalPacks = packs * M * precioUnitario;
+  const totalUnidades = unidades * precioUnitario;
+  
+  return totalCajas + totalPacks + totalUnidades;
+}
+
+
 export default async function handler(req, res) {
   // Solo POST
   if (req.method !== "POST") {
@@ -70,7 +117,7 @@ export default async function handler(req, res) {
     const ids = productos_seleccionados.map((p) => p.id);
     const { data: dbProds, error: prodErr } = await supabase
       .from("productos")
-      .select("id, nombre, formato_venta, precio, precio_costo, tipo_bulto")
+      .select("id, nombre, formato_venta, precio, precio_costo, tipo_bulto, venta_multiplo, unidades_embalaje, precio_embalaje_unidad")
       .in("id", ids);
 
     if (prodErr) {
@@ -102,7 +149,10 @@ export default async function handler(req, res) {
       const cant = parseInt(item.cantidad, 10);
       if (isNaN(cant) || cant <= 0) continue;
 
-      totalNeto += db.precio * cant;
+      const totalItem = calcularPrecioTotalItem(cant, db);
+      const precioUnitarioPromedio = Math.round(totalItem / cant);
+
+      totalNeto += totalItem;
       totalCosto += db.precio_costo * cant;
 
       if (db.tipo_bulto === "Pesado") {
@@ -113,9 +163,9 @@ export default async function handler(req, res) {
         id: db.id,
         nombre: db.nombre,
         formato_venta: db.formato_venta,
-        precioUnitario: db.precio,
+        precioUnitario: precioUnitarioPromedio,
         cantidad: cant,
-        totalItem: db.precio * cant,
+        totalItem: totalItem,
         categoria: db.tipo_bulto,
       });
     }
@@ -212,11 +262,16 @@ export default async function handler(req, res) {
 
         if (itemExistente) {
           const nuevaCant = itemExistente.cantidad + it.cantidad;
+          const db = prodMap[it.id];
+          const totalItemNuevo = db ? calcularPrecioTotalItem(nuevaCant, db) : (it.precioUnitario * nuevaCant);
+          const precioUnitarioNuevo = db ? Math.round(totalItemNuevo / nuevaCant) : it.precioUnitario;
+
           const { error: updErr } = await supabase
             .from("items_pedido")
             .update({
               cantidad: nuevaCant,
-              total_item: it.precioUnitario * nuevaCant,
+              precio_unitario: precioUnitarioNuevo,
+              total_item: totalItemNuevo,
               estado: "pendiente"
             })
             .eq("id", itemExistente.id);

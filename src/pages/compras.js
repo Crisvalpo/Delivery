@@ -30,6 +30,38 @@ const ADMIN_SECRET = process.env.NEXT_PUBLIC_ADMIN_SECRET || "";
 // 'pendiente' | 'conseguido' | 'agotado'
 const ESTADO_INICIAL = "pendiente";
 
+function obtenerDesgloseTexto(Q, E, M) {
+  if (!E && (!M || M === 1)) return "";
+  
+  let cajas = 0;
+  let packs = 0;
+  let unidades = Q;
+  
+  if (E && (!M || M === 1)) {
+    cajas = Math.floor(Q / E);
+    unidades = Q % E;
+  } else if (!E && M > 1) {
+    packs = Math.floor(Q / M);
+    unidades = Q % M;
+  } else if (E && M > 1) {
+    cajas = Math.floor(Q / E);
+    let resto = Q - (cajas * E);
+    while (cajas > 0 && resto % M !== 0) {
+      cajas--;
+      resto = Q - (cajas * E);
+    }
+    packs = Math.floor(resto / M);
+    unidades = resto % M;
+  }
+  
+  const partes = [];
+  if (cajas > 0) partes.push(`${cajas} ${cajas === 1 ? 'caja' : 'cajas'} (${E}u)`);
+  if (packs > 0) partes.push(`${packs} ${packs === 1 ? 'pack' : 'packs'} (${M}u)`);
+  if (unidades > 0) partes.push(`${unidades} ${unidades === 1 ? 'unidad' : 'unidades'}`);
+  
+  return partes.length > 0 ? `📦 Equivale a: ${partes.join(" + ")}` : "";
+}
+
 export default function ComprasPage() {
   const router = useRouter();
   const [items, setItems] = useState([]); // lista del servidor
@@ -184,14 +216,37 @@ export default function ComprasPage() {
     return (orden[estadoLocal[a.producto_id]] ?? 0) - (orden[estadoLocal[b.producto_id]] ?? 0);
   });
 
+  const itemsAgrupadosPorProveedor = itemsOrdenados.reduce((acc, item) => {
+    const prov = item.proveedor || "Sin Proveedor";
+    if (!acc[prov]) {
+      acc[prov] = [];
+    }
+    acc[prov].push(item);
+    return acc;
+  }, {});
+
+  const proveedoresOrdenados = Object.keys(itemsAgrupadosPorProveedor).sort((a, b) => {
+    if (a === "Sin Proveedor" && b !== "Sin Proveedor") return 1;
+    if (b === "Sin Proveedor" && a !== "Sin Proveedor") return -1;
+    return a.localeCompare(b);
+  });
+
   const compartirLista = () => {
-    const texto = itemsOrdenados
-      .map((it) => {
+    const lineas = [];
+    
+    proveedoresOrdenados.forEach((provNombre) => {
+      lineas.push(`*${provNombre}:*`);
+      itemsAgrupadosPorProveedor[provNombre].forEach((it) => {
         const estado = estadoLocal[it.producto_id];
         const icono = estado === "conseguido" ? "✅" : estado === "agotado" ? "❌" : "🔲";
-        return `${icono} ${it.cantidad_total}x ${it.nombre} (${it.formato_venta})`;
-      })
-      .join("\n");
+        const desc = obtenerDesgloseTexto(it.cantidad_total, it.unidades_embalaje, it.venta_multiplo);
+        const descTexto = desc ? ` (${desc.replace('📦 Equivale a: ', '')})` : '';
+        lineas.push(`${icono} ${it.cantidad_total}x ${it.nombre} (${it.formato_venta})${descTexto}`);
+      });
+      lineas.push("");
+    });
+
+    const texto = lineas.join("\n").trim();
 
     const mensaje = `📋 Lista de Compras LukeDelivery\n${ventana ? `Ventana: ${ventana.nombre}\n` : ""}${new Date().toLocaleDateString("es-CL")}\n\n${texto}\n\n✅ ${conseguidos} conseguidos  ❌ ${agotados} agotados  🔲 ${pendientes} pendientes`;
 
@@ -340,123 +395,144 @@ export default function ComprasPage() {
               <span>Marca cada producto a medida que lo consigas. Esto actualiza el estado en los pedidos de los clientes.</span>
             </div>
 
-            {/* Lista de ítems */}
-            {itemsOrdenados.map((item) => {
-              const estado = estadoLocal[item.producto_id] || "pendiente";
-              const esConseguido = estado === "conseguido";
-              const esAgotado = estado === "agotado";
-              const esPendiente = estado === "pendiente";
-              const cargando = guardando[item.producto_id];
-
-              return (
-                <div
-                  key={item.producto_id}
-                  className={`relative rounded-2xl border transition-all duration-300 overflow-hidden ${
-                    esConseguido
-                      ? "bg-emerald-500/5 border-emerald-500/25 opacity-75"
-                      : esAgotado
-                      ? "bg-red-500/5 border-red-500/25 opacity-60"
-                      : "bg-slate-900/70 border-slate-800"
-                  }`}
-                >
-                  {/* Indicador lateral de estado */}
-                  <div
-                    className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl transition-all ${
-                      esConseguido ? "bg-emerald-500" : esAgotado ? "bg-red-500" : "bg-slate-700"
-                    }`}
-                  />
-
-                  <div className="pl-4 pr-4 py-4">
-                    {/* Fila principal */}
-                    <div className="flex items-start gap-3">
-                      {/* Indicador visual de estado */}
-                      <div className="mt-0.5 shrink-0">
-                        {esConseguido ? (
-                          <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-                        ) : esAgotado ? (
-                          <XCircle className="w-6 h-6 text-red-400" />
-                        ) : (
-                          <div className="w-6 h-6 rounded-full border-2 border-slate-600" />
-                        )}
-                      </div>
-
-                      {/* Info del producto */}
-                      <div className="flex-1 min-w-0">
-                        <p
-                          className={`font-bold text-sm leading-snug ${
-                            esConseguido
-                              ? "line-through text-slate-500"
-                              : esAgotado
-                              ? "line-through text-red-400/60"
-                              : "text-slate-100"
-                          }`}
-                        >
-                          {item.nombre}
-                        </p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">{item.formato_venta}</p>
-                      </div>
-
-                      {/* Cantidad */}
-                      <div
-                        className={`shrink-0 text-right ${
-                          esConseguido ? "text-emerald-400" : esAgotado ? "text-red-400" : "text-white"
-                        }`}
-                      >
-                        <span className="text-2xl font-black leading-none">{item.cantidad_total}</span>
-                        <span className="text-[10px] text-slate-500 block font-bold">unidades</span>
-                      </div>
-                    </div>
-
-                    {/* Botones de acción */}
-                    <div className="flex gap-2 mt-3.5">
-                      {esPendiente && (
-                        <>
-                          <button
-                            onClick={() => marcarItem(item.producto_id, "conseguido")}
-                            disabled={cargando}
-                            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
-                          >
-                            {cargando ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <CheckCircle2 className="w-4 h-4" />
-                            )}
-                            Conseguido
-                          </button>
-                          <button
-                            onClick={() => marcarItem(item.producto_id, "no_disponible")}
-                            disabled={cargando}
-                            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
-                          >
-                            {cargando ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <XCircle className="w-4 h-4" />
-                            )}
-                            Agotado
-                          </button>
-                        </>
-                      )}
-
-                      {(esConseguido || esAgotado) && (
-                        <button
-                          onClick={() => resetearItem(item.producto_id)}
-                          disabled={cargando}
-                          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
-                        >
-                          {cargando ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <RotateCcw className="w-4 h-4" />
-                          )}
-                          Deshacer
-                        </button>
-                      )}
-                    </div>
+            {/* Lista de ítems agrupados por proveedor */}
+            {proveedoresOrdenados.map((provNombre) => (
+              <div key={provNombre} className="space-y-3">
+                <div className="flex items-center gap-2 px-1 pt-3 pb-1">
+                  <div className="bg-amber-500/10 p-1.5 rounded-lg text-amber-400 border border-amber-500/20">
+                    <Truck className="w-3.5 h-3.5 animate-pulse" />
                   </div>
+                  <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest">
+                    {provNombre}
+                  </h3>
+                  <div className="h-px bg-slate-900 flex-1 ml-2" />
                 </div>
-              );
-            })}
+                {itemsAgrupadosPorProveedor[provNombre].map((item) => {
+                  const estado = estadoLocal[item.producto_id] || "pendiente";
+                  const esConseguido = estado === "conseguido";
+                  const esAgotado = estado === "agotado";
+                  const esPendiente = estado === "pendiente";
+                  const cargando = guardando[item.producto_id];
+
+                  return (
+                    <div
+                      key={item.producto_id}
+                      className={`relative rounded-2xl border transition-all duration-300 overflow-hidden ${
+                        esConseguido
+                          ? "bg-emerald-500/5 border-emerald-500/25 opacity-75"
+                          : esAgotado
+                          ? "bg-red-500/5 border-red-500/25 opacity-60"
+                          : "bg-slate-900/70 border-slate-800"
+                      }`}
+                    >
+                      {/* Indicador lateral de estado */}
+                      <div
+                        className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl transition-all ${
+                          esConseguido ? "bg-emerald-500" : esAgotado ? "bg-red-500" : "bg-slate-700"
+                        }`}
+                      />
+
+                      <div className="pl-4 pr-4 py-4">
+                        {/* Fila principal */}
+                        <div className="flex items-start gap-3">
+                          {/* Indicador visual de estado */}
+                          <div className="mt-0.5 shrink-0">
+                            {esConseguido ? (
+                              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                            ) : esAgotado ? (
+                              <XCircle className="w-6 h-6 text-red-400" />
+                            ) : (
+                              <div className="w-6 h-6 rounded-full border-2 border-slate-600" />
+                            )}
+                          </div>
+
+                          {/* Info del producto */}
+                          <div className="flex-1 min-w-0">
+                            <p
+                              className={`font-bold text-sm leading-snug ${
+                                esConseguido
+                                  ? "line-through text-slate-500"
+                                  : esAgotado
+                                  ? "line-through text-red-400/60"
+                                  : "text-slate-100"
+                              }`}
+                            >
+                              {item.nombre}
+                            </p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">{item.formato_venta}</p>
+                            {(() => {
+                              const desc = obtenerDesgloseTexto(item.cantidad_total, item.unidades_embalaje, item.venta_multiplo);
+                              return desc ? (
+                                <p className="text-[10px] text-emerald-400 font-bold mt-1 bg-slate-900/40 py-1 px-2 rounded w-fit border border-slate-800/40">
+                                  {desc}
+                                </p>
+                              ) : null;
+                            })()}
+                          </div>
+
+                          {/* Cantidad */}
+                          <div
+                            className={`shrink-0 text-right ${
+                              esConseguido ? "text-emerald-400" : esAgotado ? "text-red-400" : "text-white"
+                            }`}
+                          >
+                            <span className="text-2xl font-black leading-none">{item.cantidad_total}</span>
+                            <span className="text-[10px] text-slate-500 block font-bold">unidades</span>
+                          </div>
+                        </div>
+
+                        {/* Botones de acción */}
+                        <div className="flex gap-2 mt-3.5">
+                          {esPendiente && (
+                            <>
+                              <button
+                                onClick={() => marcarItem(item.producto_id, "conseguido")}
+                                disabled={cargando}
+                                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
+                              >
+                                {cargando ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="w-4 h-4" />
+                                )}
+                                Conseguido
+                              </button>
+                              <button
+                                onClick={() => marcarItem(item.producto_id, "no_disponible")}
+                                disabled={cargando}
+                                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
+                              >
+                                {cargando ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <XCircle className="w-4 h-4" />
+                                )}
+                                Agotado
+                              </button>
+                            </>
+                          )}
+
+                          {(esConseguido || esAgotado) && (
+                            <button
+                              onClick={() => resetearItem(item.producto_id)}
+                              disabled={cargando}
+                              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
+                            >
+                              {cargando ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <RotateCcw className="w-4 h-4" />
+                              )}
+                              Deshacer
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
 
             {/* Mensaje de cierre al completar */}
             {progreso === 100 && (

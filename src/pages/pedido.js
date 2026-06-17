@@ -24,6 +24,53 @@ const CATEGORIAS_COMPATIBLES = {
   "Fiambrería": ["Abarrotes", "Limpieza"]
 };
 
+function obtenerDesglose(Q, E, M) {
+  if (!E && !M) {
+    return { cajas: 0, packs: 0, unidades: Q };
+  }
+  if (E && !M) {
+    const cajas = Math.floor(Q / E);
+    const unidades = Q % E;
+    return { cajas, packs: 0, unidades };
+  }
+  if (!E && M) {
+    const packs = Math.floor(Q / M);
+    const unidades = Q % M;
+    return { cajas: 0, packs, unidades };
+  }
+  
+  let cajas = Math.floor(Q / E);
+  let resto = Q - (cajas * E);
+  
+  while (cajas > 0 && resto % M !== 0) {
+    cajas--;
+    resto = Q - (cajas * E);
+  }
+  
+  const packs = Math.floor(resto / M);
+  const unidades = resto % M;
+  
+  return { cajas, packs, unidades };
+}
+
+function calcularPrecioTotalItem(Q, p) {
+  const E = p.unidades_embalaje;
+  const M = p.venta_multiplo || 1;
+  const precioUnitario = p.precio;
+  const precioCajaUnitario = p.precio_embalaje_unidad !== null && p.precio_embalaje_unidad !== undefined 
+    ? p.precio_embalaje_unidad 
+    : p.precio;
+  
+  const { cajas, packs, unidades } = obtenerDesglose(Q, E, M);
+  
+  const totalCajas = cajas * E * precioCajaUnitario;
+  const totalPacks = packs * M * precioUnitario;
+  const totalUnidades = unidades * precioUnitario;
+  
+  return totalCajas + totalPacks + totalUnidades;
+}
+
+
 export default function PedidoPage() {
   const router = useRouter();
 
@@ -254,7 +301,7 @@ export default function PedidoPage() {
   };
 
   const total = productos.reduce(
-    (sum, p) => sum + p.precio * (carrito[p.id] || 0),
+    (sum, p) => sum + calcularPrecioTotalItem(carrito[p.id] || 0, p),
     0
   );
   const cumpleMinimo = total >= MONTO_MINIMO || (pedidoPendiente !== null && total > 0);
@@ -702,42 +749,235 @@ export default function PedidoPage() {
                                 </div>
 
                                 {/* Fila Inferior: Precio e Incrementador */}
-                                <div className="flex items-center justify-between gap-2 mt-2">
-                                  <div className="flex flex-col">
-                                    <span className="text-[17px] font-black text-gray-900 leading-none">
-                                      {fmt(p.precio)}
-                                    </span>
-                                    <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-1">
-                                      costo real
-                                    </span>
-                                  </div>
+                                <div className="mt-2.5 space-y-2.5">
+                                  {/* Mostrar los precios/tiers del producto si tiene configuración especial */}
+                                  {(p.venta_multiplo > 1 || p.unidades_embalaje) && (
+                                    <div className="flex flex-col gap-1 text-[10px] bg-slate-50 border border-slate-100 p-2 rounded-lg text-slate-650">
+                                      {p.venta_multiplo > 1 && (
+                                        <div className="flex justify-between">
+                                          <span>Pack ({p.venta_multiplo} unidades):</span>
+                                          <span className="font-extrabold text-slate-800">{fmt(p.precio)} c/u ({fmt(p.precio * p.venta_multiplo)})</span>
+                                        </div>
+                                      )}
+                                      {p.unidades_embalaje && (
+                                        <div className="flex justify-between text-emerald-600 font-medium">
+                                          <span>Caja cerrada ({p.unidades_embalaje}u):</span>
+                                          <span className="font-extrabold">{fmt(p.precio_embalaje_unidad || p.precio)} c/u ({fmt((p.precio_embalaje_unidad || p.precio) * p.unidades_embalaje)})</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
 
-                                  {/* Selector compacto [-] N [+] */}
-                                  <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200 overflow-hidden h-9 shrink-0">
-                                    <button
-                                      onClick={() => setCantidad(p.id, -1)}
-                                      disabled={cant === 0}
-                                      className={`h-9 w-9 flex items-center justify-center transition-all cursor-pointer font-bold ${
-                                        cant === 0
-                                          ? "text-gray-300 bg-gray-100/50 cursor-not-allowed"
-                                          : "text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90"
-                                      }`}
-                                    >
-                                      <Minus className="h-4 w-4 stroke-[3]" />
-                                    </button>
-                                    <span
-                                      className={`w-8 text-center text-sm font-bold select-none ${
-                                        isActive ? "text-brand" : "text-gray-700"
-                                      }`}
-                                    >
-                                      {cant}
-                                    </span>
-                                    <button
-                                      onClick={() => setCantidad(p.id, 1)}
-                                      className="h-9 w-9 flex items-center justify-center text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90 font-bold transition-all cursor-pointer"
-                                    >
-                                      <Plus className="h-4 w-4 stroke-[3]" />
-                                    </button>
+                                  {/* Selectores */}
+                                  <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-50">
+                                    <div className="flex flex-col">
+                                      {cant > 0 ? (
+                                        <>
+                                          <span className="text-[17px] font-black text-brand leading-none">
+                                            {fmt(calcularPrecioTotalItem(cant, p))}
+                                          </span>
+                                          <span className="text-[9px] text-brand font-bold uppercase tracking-wider mt-1">
+                                            Total: {cant} u.
+                                          </span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className="text-[17px] font-black text-gray-900 leading-none">
+                                            {fmt(p.precio)}
+                                          </span>
+                                          <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-1">
+                                            costo real
+                                          </span>
+                                        </>
+                                      )}
+                                    </div>
+
+                                    {/* Mostrar selectores dinámicos */}
+                                    {(() => {
+                                      const E = p.unidades_embalaje;
+                                      const M = p.venta_multiplo || 1;
+                                      const { cajas, packs, unidades } = obtenerDesglose(cant, E, M);
+
+                                      // Caso 1: Tiene packs y cajas
+                                      if (M > 1 && E > 0) {
+                                        return (
+                                          <div className="flex flex-col gap-2 w-full sm:w-auto">
+                                            {/* Selector de Cajas */}
+                                            <div className="flex items-center justify-between gap-4">
+                                              <span className="text-[10px] font-extrabold text-emerald-600 uppercase">Cajas:</span>
+                                              <div className="flex items-center bg-emerald-50 rounded-lg border border-emerald-250 overflow-hidden h-8 shrink-0">
+                                                <button
+                                                  onClick={() => setCantidad(p.id, -E)}
+                                                  disabled={cajas === 0}
+                                                  className={`h-8 w-8 flex items-center justify-center transition-all cursor-pointer font-bold ${
+                                                    cajas === 0
+                                                      ? "text-emerald-300 bg-emerald-100/30 cursor-not-allowed"
+                                                      : "text-emerald-700 bg-emerald-100 hover:bg-emerald-200 active:scale-90"
+                                                  }`}
+                                                >
+                                                  <Minus className="h-3 w-3 stroke-[3]" />
+                                                </button>
+                                                <span className={`w-8 text-center text-xs font-black select-none ${cajas > 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                                                  {cajas}
+                                                </span>
+                                                <button
+                                                  onClick={() => setCantidad(p.id, E)}
+                                                  className="h-8 w-8 flex items-center justify-center text-emerald-700 bg-emerald-100 hover:bg-emerald-200 active:scale-90 font-bold transition-all cursor-pointer"
+                                                >
+                                                  <Plus className="h-3 w-3 stroke-[3]" />
+                                                </button>
+                                              </div>
+                                            </div>
+
+                                            {/* Selector de Packs */}
+                                            <div className="flex items-center justify-between gap-4">
+                                              <span className="text-[10px] font-extrabold text-brand uppercase">Packs ({M}u):</span>
+                                              <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200 overflow-hidden h-8 shrink-0">
+                                                <button
+                                                  onClick={() => setCantidad(p.id, -M)}
+                                                  disabled={packs === 0}
+                                                  className={`h-8 w-8 flex items-center justify-center transition-all cursor-pointer font-bold ${
+                                                    packs === 0
+                                                      ? "text-gray-300 bg-gray-100/50 cursor-not-allowed"
+                                                      : "text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90"
+                                                  }`}
+                                                >
+                                                  <Minus className="h-3 w-3 stroke-[3]" />
+                                                </button>
+                                                <span className={`w-8 text-center text-xs font-bold select-none ${packs > 0 ? "text-brand" : "text-slate-400"}`}>
+                                                  {packs}
+                                                </span>
+                                                <button
+                                                  onClick={() => setCantidad(p.id, M)}
+                                                  className="h-8 w-8 flex items-center justify-center text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90 font-bold transition-all cursor-pointer"
+                                                >
+                                                  <Plus className="h-3 w-3 stroke-[3]" />
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+
+                                      // Caso 2: Solo Packs
+                                      if (M > 1 && !E) {
+                                        return (
+                                          <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200 overflow-hidden h-9 shrink-0">
+                                            <button
+                                              onClick={() => setCantidad(p.id, -M)}
+                                              disabled={cant === 0}
+                                              className={`h-9 w-9 flex items-center justify-center transition-all cursor-pointer font-bold ${
+                                                cant === 0
+                                                  ? "text-gray-300 bg-gray-100/50 cursor-not-allowed"
+                                                  : "text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90"
+                                              }`}
+                                            >
+                                              <Minus className="h-4 w-4 stroke-[3]" />
+                                            </button>
+                                            <span className={`w-12 text-center text-xs font-bold select-none ${isActive ? "text-brand" : "text-gray-700"}`}>
+                                              {packs} packs
+                                            </span>
+                                            <button
+                                              onClick={() => setCantidad(p.id, M)}
+                                              className="h-9 w-9 flex items-center justify-center text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90 font-bold transition-all cursor-pointer"
+                                            >
+                                              <Plus className="h-4 w-4 stroke-[3]" />
+                                            </button>
+                                          </div>
+                                        );
+                                      }
+
+                                      // Caso 3: Solo Cajas (o cajas + unidades sueltas)
+                                      if (E > 0) {
+                                        return (
+                                          <div className="flex flex-col gap-2 w-full sm:w-auto">
+                                            {/* Selector de Cajas */}
+                                            <div className="flex items-center justify-between gap-4">
+                                              <span className="text-[10px] font-extrabold text-emerald-600 uppercase">Cajas:</span>
+                                              <div className="flex items-center bg-emerald-50 rounded-lg border border-emerald-250 overflow-hidden h-8 shrink-0">
+                                                <button
+                                                  onClick={() => setCantidad(p.id, -E)}
+                                                  disabled={cajas === 0}
+                                                  className={`h-8 w-8 flex items-center justify-center transition-all cursor-pointer font-bold ${
+                                                    cajas === 0
+                                                      ? "text-emerald-300 bg-emerald-100/30 cursor-not-allowed"
+                                                      : "text-emerald-700 bg-emerald-100 hover:bg-emerald-200 active:scale-90"
+                                                  }`}
+                                                >
+                                                  <Minus className="h-3 w-3 stroke-[3]" />
+                                                </button>
+                                                <span className={`w-8 text-center text-xs font-black select-none ${cajas > 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                                                  {cajas}
+                                                </span>
+                                                <button
+                                                  onClick={() => setCantidad(p.id, E)}
+                                                  className="h-8 w-8 flex items-center justify-center text-emerald-700 bg-emerald-100 hover:bg-emerald-200 active:scale-90 font-bold transition-all cursor-pointer"
+                                                >
+                                                  <Plus className="h-3 w-3 stroke-[3]" />
+                                                </button>
+                                              </div>
+                                            </div>
+
+                                            {/* Selector de Unidades Sueltas */}
+                                            <div className="flex items-center justify-between gap-4">
+                                              <span className="text-[10px] font-extrabold text-slate-500 uppercase">Unidades:</span>
+                                              <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200 overflow-hidden h-8 shrink-0">
+                                                <button
+                                                  onClick={() => setCantidad(p.id, -1)}
+                                                  disabled={unidades === 0}
+                                                  className={`h-8 w-8 flex items-center justify-center transition-all cursor-pointer font-bold ${
+                                                    unidades === 0
+                                                      ? "text-gray-300 bg-gray-100/50 cursor-not-allowed"
+                                                      : "text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90"
+                                                  }`}
+                                                >
+                                                  <Minus className="h-3 w-3 stroke-[3]" />
+                                                </button>
+                                                <span className={`w-8 text-center text-xs font-bold select-none ${unidades > 0 ? "text-slate-800" : "text-slate-400"}`}>
+                                                  {unidades}
+                                                </span>
+                                                <button
+                                                  onClick={() => setCantidad(p.id, 1)}
+                                                  className="h-8 w-8 flex items-center justify-center text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90 font-bold transition-all cursor-pointer"
+                                                >
+                                                  <Plus className="h-3 w-3 stroke-[3]" />
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+
+                                      // Caso 4: Producto estándar (unidad a unidad)
+                                      return (
+                                        <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200 overflow-hidden h-9 shrink-0">
+                                          <button
+                                            onClick={() => setCantidad(p.id, -1)}
+                                            disabled={cant === 0}
+                                            className={`h-9 w-9 flex items-center justify-center transition-all cursor-pointer font-bold ${
+                                              cant === 0
+                                                ? "text-gray-300 bg-gray-100/50 cursor-not-allowed"
+                                                : "text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90"
+                                            }`}
+                                          >
+                                            <Minus className="h-4 w-4 stroke-[3]" />
+                                          </button>
+                                          <span
+                                            className={`w-8 text-center text-sm font-bold select-none ${
+                                              isActive ? "text-brand" : "text-gray-700"
+                                            }`}
+                                          >
+                                            {cant}
+                                          </span>
+                                          <button
+                                            onClick={() => setCantidad(p.id, 1)}
+                                            className="h-9 w-9 flex items-center justify-center text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90 font-bold transition-all cursor-pointer"
+                                          >
+                                            <Plus className="h-4 w-4 stroke-[3]" />
+                                          </button>
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                               </div>
