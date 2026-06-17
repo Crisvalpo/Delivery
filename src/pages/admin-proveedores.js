@@ -26,6 +26,7 @@ export default function AdminProveedoresPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null); // { type: 'success' | 'error', message: string }
+  const [capturandoGps, setCapturandoGps] = useState(false);
 
   // Formulario
   const [form, setForm] = useState({
@@ -34,7 +35,9 @@ export default function AdminProveedoresPage() {
     telefono: "",
     contacto_whatsapp: "",
     direccion: "",
-    notas: ""
+    notas: "",
+    latitud: "",
+    longitud: ""
   });
   const [editingId, setEditingId] = useState(null); // ID si estamos editando, null para crear
 
@@ -88,7 +91,9 @@ export default function AdminProveedoresPage() {
         telefono: form.telefono.trim() || null,
         contacto_whatsapp: whatsappLimpio || null,
         direccion: form.direccion.trim() || null,
-        notas: form.notas.trim() || null
+        notas: form.notas.trim() || null,
+        latitud: form.latitud ? parseFloat(form.latitud) : null,
+        longitud: form.longitud ? parseFloat(form.longitud) : null
       };
 
       if (editingId) {
@@ -117,7 +122,9 @@ export default function AdminProveedoresPage() {
         telefono: "",
         contacto_whatsapp: "",
         direccion: "",
-        notas: ""
+        notas: "",
+        latitud: "",
+        longitud: ""
       });
       setEditingId(null);
 
@@ -148,7 +155,9 @@ export default function AdminProveedoresPage() {
       contacto_whatsapp: p.contacto_whatsapp || "",
       direccion: p.direccion || "",
       notes: p.notas || "", // compatibility mapping
-      notas: p.notas || ""
+      notas: p.notas || "",
+      latitud: p.latitud !== null && p.latitud !== undefined ? p.latitud.toString() : "",
+      longitud: p.longitud !== null && p.longitud !== undefined ? p.longitud.toString() : ""
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -174,7 +183,9 @@ export default function AdminProveedoresPage() {
           telefono: "",
           contacto_whatsapp: "",
           direccion: "",
-          notas: ""
+          notas: "",
+          latitud: "",
+          longitud: ""
         });
         setEditingId(null);
       }
@@ -202,8 +213,40 @@ export default function AdminProveedoresPage() {
       telefono: "",
       contacto_whatsapp: "",
       direccion: "",
-      notas: ""
+      notas: "",
+      latitud: "",
+      longitud: ""
     });
+  };
+
+  const capturarGPS = () => {
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      alert("Tu navegador no soporta geolocalización.");
+      return;
+    }
+    setCapturandoGps(true);
+    setStatus(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setForm((prev) => ({
+          ...prev,
+          latitud: pos.coords.latitude.toFixed(6),
+          longitud: pos.coords.longitude.toFixed(6)
+        }));
+        setCapturandoGps(false);
+        setStatus({ type: "success", message: "Coordenadas GPS obtenidas correctamente." });
+        setTimeout(() => setStatus(null), 3000);
+      },
+      (err) => {
+        console.error("Error obteniendo ubicación:", err);
+        setCapturandoGps(false);
+        setStatus({
+          type: "error",
+          message: "No se pudo obtener la ubicación. Asegúrate de otorgar permisos de GPS."
+        });
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
   const abrirChatWhatsApp = (numero, nombreVendedor, nombreProveedor) => {
@@ -345,6 +388,58 @@ export default function AdminProveedoresPage() {
                   </div>
                 </div>
 
+                {/* Geolocalización GPS */}
+                <div className="space-y-2 border-t border-slate-900 pt-3.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-300">
+                      Geolocalización (Visita)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={capturarGPS}
+                      disabled={capturandoGps}
+                      className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 hover:text-emerald-305 transition bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 px-2.5 py-1 rounded-lg cursor-pointer disabled:opacity-50"
+                    >
+                      {capturandoGps ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>Obteniendo...</span>
+                        </>
+                      ) : (
+                        <>
+                          <MapPin className="w-3 h-3" />
+                          <span>Capturar GPS 📍</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="Latitud (ej: -33.102)"
+                        value={form.latitud}
+                        onChange={(e) => setForm({ ...form, latitud: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="Longitud (ej: -71.559)"
+                        value={form.longitud}
+                        onChange={(e) => setForm({ ...form, longitud: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                      />
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block leading-tight">
+                    Haz clic en "Capturar GPS" cuando estés físicamente en el local del proveedor para guardar su geolocalización exacta de terreno.
+                  </span>
+                </div>
+
                 {/* Notas */}
                 <div className="space-y-1.5">
                   <label htmlFor="notas" className="text-xs font-semibold text-slate-300 block">
@@ -455,6 +550,13 @@ export default function AdminProveedoresPage() {
                             </p>
                           )}
 
+                          {p.latitud !== null && p.longitud !== null && p.latitud !== undefined && p.longitud !== undefined && (
+                            <p className="text-[10px] text-slate-500 flex items-center gap-1.5 font-semibold">
+                              <MapPin className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                              <span>GPS: {parseFloat(p.latitud).toFixed(6)}, {parseFloat(p.longitud).toFixed(6)}</span>
+                            </p>
+                          )}
+
                           {p.telefono && (
                             <p className="text-xs text-slate-400 flex items-center gap-1.5">
                               <Phone className="w-3.5 h-3.5 text-slate-500 shrink-0" />
@@ -480,6 +582,18 @@ export default function AdminProveedoresPage() {
                               <MessageSquare className="w-3.5 h-3.5" />
                               <span>WhatsApp</span>
                             </button>
+                          )}
+                          {p.latitud !== null && p.longitud !== null && p.latitud !== undefined && p.longitud !== undefined && (
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${p.latitud},${p.longitud}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 bg-sky-600/10 hover:bg-sky-600/20 border border-sky-500/30 text-sky-400 hover:text-sky-300 text-xs px-3 py-1.5 rounded-lg transition cursor-pointer font-bold w-full justify-center"
+                              title="Ver ubicación en Google Maps"
+                            >
+                              <MapPin className="w-3.5 h-3.5" />
+                              <span>Navegar GPS</span>
+                            </a>
                           )}
                           <div className="flex gap-2 w-full justify-end">
                             <button
