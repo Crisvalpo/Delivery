@@ -26,30 +26,32 @@ const CATEGORIAS_COMPATIBLES = {
 };
 
 function obtenerDesglose(Q, E, M) {
-  if (!E && !M) {
+  const multiplo = (M && M > 1) ? M : null;
+  
+  if (!E && !multiplo) {
     return { cajas: 0, packs: 0, unidades: Q };
   }
-  if (E && !M) {
+  if (E && !multiplo) {
     const cajas = Math.floor(Q / E);
     const unidades = Q % E;
     return { cajas, packs: 0, unidades };
   }
-  if (!E && M) {
-    const packs = Math.floor(Q / M);
-    const unidades = Q % M;
+  if (!E && multiplo) {
+    const packs = Math.floor(Q / multiplo);
+    const unidades = Q % multiplo;
     return { cajas: 0, packs, unidades };
   }
   
   let cajas = Math.floor(Q / E);
   let resto = Q - (cajas * E);
   
-  while (cajas > 0 && resto % M !== 0) {
+  while (cajas > 0 && resto % multiplo !== 0) {
     cajas--;
     resto = Q - (cajas * E);
   }
   
-  const packs = Math.floor(resto / M);
-  const unidades = resto % M;
+  const packs = Math.floor(resto / multiplo);
+  const unidades = resto % multiplo;
   
   return { cajas, packs, unidades };
 }
@@ -309,8 +311,22 @@ export default function PedidoPage() {
 
   // --- Funciones del carrito ---
   const setCantidad = (id, delta) => {
+    const p = productos.find(prod => prod.id === id);
+    if (!p) return;
+
     setCarrito((prev) => {
-      const next = Math.max(0, (prev[id] || 0) + delta);
+      const currentQty = prev[id] || 0;
+      let next = currentQty + delta;
+      
+      // Control de stock
+      if (p.stock !== undefined && p.stock !== null) {
+        if (next > p.stock) {
+          next = p.stock;
+        }
+      }
+
+      next = Math.max(0, next);
+
       if (next === 0) {
         const { [id]: _, ...rest } = prev;
         return rest;
@@ -505,7 +521,7 @@ export default function PedidoPage() {
               Cargando precios de costo...
             </p>
           </div>
-        ) : !tokenError && productosFiltrados.length === 0 ? (
+        ) : !tokenError && productosCompatibles.length === 0 ? (
           <div className="text-center py-24">
             <p className="text-text-secondary">
               No hay productos disponibles para tu tipo de negocio en este momento.
@@ -819,9 +835,13 @@ export default function PedidoPage() {
                                       const E = p.unidades_embalaje;
                                       const M = p.venta_multiplo || 1;
                                       const { cajas, packs, unidades } = obtenerDesglose(cant, E, M);
+                                      const hasStockLimit = p.stock !== null && p.stock !== undefined;
 
                                       // Caso 1: Tiene packs y cajas
                                       if (M > 1 && E > 0) {
+                                        const disabledCajasPlus = hasStockLimit && cant + E > p.stock;
+                                        const disabledPacksPlus = hasStockLimit && cant + M > p.stock;
+
                                         return (
                                           <div className="flex flex-col gap-2 w-full sm:w-auto">
                                             {/* Selector de Cajas */}
@@ -844,7 +864,12 @@ export default function PedidoPage() {
                                                 </span>
                                                 <button
                                                   onClick={() => setCantidad(p.id, E)}
-                                                  className="h-8 w-8 flex items-center justify-center text-emerald-700 bg-emerald-100 hover:bg-emerald-200 active:scale-90 font-bold transition-all cursor-pointer"
+                                                  disabled={disabledCajasPlus}
+                                                  className={`h-8 w-8 flex items-center justify-center font-bold transition-all cursor-pointer ${
+                                                    disabledCajasPlus
+                                                      ? "text-emerald-300 bg-emerald-100/30 cursor-not-allowed"
+                                                      : "text-emerald-700 bg-emerald-100 hover:bg-emerald-200 active:scale-90"
+                                                  }`}
                                                 >
                                                   <Plus className="h-3 w-3 stroke-[3]" />
                                                 </button>
@@ -871,7 +896,12 @@ export default function PedidoPage() {
                                                 </span>
                                                 <button
                                                   onClick={() => setCantidad(p.id, M)}
-                                                  className="h-8 w-8 flex items-center justify-center text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90 font-bold transition-all cursor-pointer"
+                                                  disabled={disabledPacksPlus}
+                                                  className={`h-8 w-8 flex items-center justify-center font-bold transition-all cursor-pointer ${
+                                                    disabledPacksPlus
+                                                      ? "text-gray-300 bg-gray-100/50 cursor-not-allowed"
+                                                      : "text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90"
+                                                  }`}
                                                 >
                                                   <Plus className="h-3 w-3 stroke-[3]" />
                                                 </button>
@@ -883,6 +913,8 @@ export default function PedidoPage() {
 
                                       // Caso 2: Solo Packs
                                       if (M > 1 && !E) {
+                                        const disabledPacksOnlyPlus = hasStockLimit && cant + M > p.stock;
+
                                         return (
                                           <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200 overflow-hidden h-9 shrink-0">
                                             <button
@@ -901,7 +933,12 @@ export default function PedidoPage() {
                                             </span>
                                             <button
                                               onClick={() => setCantidad(p.id, M)}
-                                              className="h-9 w-9 flex items-center justify-center text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90 font-bold transition-all cursor-pointer"
+                                              disabled={disabledPacksOnlyPlus}
+                                              className={`h-9 w-9 flex items-center justify-center font-bold transition-all cursor-pointer ${
+                                                disabledPacksOnlyPlus
+                                                  ? "text-gray-300 bg-gray-100/50 cursor-not-allowed"
+                                                  : "text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90"
+                                              }`}
                                             >
                                               <Plus className="h-4 w-4 stroke-[3]" />
                                             </button>
@@ -911,6 +948,9 @@ export default function PedidoPage() {
 
                                       // Caso 3: Solo Cajas (o cajas + unidades sueltas)
                                       if (E > 0) {
+                                        const disabledCajasOnlyPlus = hasStockLimit && cant + E > p.stock;
+                                        const disabledUnidadesPlus = hasStockLimit && cant + 1 > p.stock;
+
                                         return (
                                           <div className="flex flex-col gap-2 w-full sm:w-auto">
                                             {/* Selector de Cajas */}
@@ -933,7 +973,12 @@ export default function PedidoPage() {
                                                 </span>
                                                 <button
                                                   onClick={() => setCantidad(p.id, E)}
-                                                  className="h-8 w-8 flex items-center justify-center text-emerald-700 bg-emerald-100 hover:bg-emerald-200 active:scale-90 font-bold transition-all cursor-pointer"
+                                                  disabled={disabledCajasOnlyPlus}
+                                                  className={`h-8 w-8 flex items-center justify-center font-bold transition-all cursor-pointer ${
+                                                    disabledCajasOnlyPlus
+                                                      ? "text-emerald-300 bg-emerald-100/30 cursor-not-allowed"
+                                                      : "text-emerald-700 bg-emerald-100 hover:bg-emerald-200 active:scale-90"
+                                                  }`}
                                                 >
                                                   <Plus className="h-3 w-3 stroke-[3]" />
                                                 </button>
@@ -960,7 +1005,12 @@ export default function PedidoPage() {
                                                 </span>
                                                 <button
                                                   onClick={() => setCantidad(p.id, 1)}
-                                                  className="h-8 w-8 flex items-center justify-center text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90 font-bold transition-all cursor-pointer"
+                                                  disabled={disabledUnidadesPlus}
+                                                  className={`h-8 w-8 flex items-center justify-center font-bold transition-all cursor-pointer ${
+                                                    disabledUnidadesPlus
+                                                      ? "text-gray-300 bg-gray-100/50 cursor-not-allowed"
+                                                      : "text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90"
+                                                  }`}
                                                 >
                                                   <Plus className="h-3 w-3 stroke-[3]" />
                                                 </button>
@@ -971,6 +1021,8 @@ export default function PedidoPage() {
                                       }
 
                                       // Caso 4: Producto estándar (unidad a unidad)
+                                      const disabledEstandarPlus = hasStockLimit && cant + 1 > p.stock;
+
                                       return (
                                         <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200 overflow-hidden h-9 shrink-0">
                                           <button
@@ -993,7 +1045,12 @@ export default function PedidoPage() {
                                           </span>
                                           <button
                                             onClick={() => setCantidad(p.id, 1)}
-                                            className="h-9 w-9 flex items-center justify-center text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90 font-bold transition-all cursor-pointer"
+                                            disabled={disabledEstandarPlus}
+                                            className={`h-9 w-9 flex items-center justify-center font-bold transition-all cursor-pointer ${
+                                              disabledEstandarPlus
+                                                ? "text-gray-300 bg-gray-100/50 cursor-not-allowed"
+                                                : "text-gray-700 bg-gray-100 hover:bg-gray-200 active:scale-90"
+                                            }`}
                                           >
                                             <Plus className="h-4 w-4 stroke-[3]" />
                                           </button>
