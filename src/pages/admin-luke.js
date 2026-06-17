@@ -245,6 +245,16 @@ export default function AdminLukePage() {
     setPaginaActual(1);
   }, [filtroNombreSku, filtroCategoria, filtroBulto]);
 
+  const categoriasUnicas = Array.from(new Set([
+    "Abarrotes", 
+    "Confites", 
+    "Limpieza", 
+    "Verdulería", 
+    "Bebidas",
+    ...productos.map((p) => p.categoria).filter(Boolean),
+    productForm.categoria
+  ])).filter(Boolean).sort();
+
   const productosFiltrados = productos.filter((prod) => {
     const cumpleBusqueda = filtroNombreSku.trim() === "" || 
       cleanText(prod.nombre).toLowerCase().includes(filtroNombreSku.toLowerCase()) || 
@@ -1792,7 +1802,7 @@ export default function AdminLukePage() {
                   className="w-full bg-bg-surface border border-border rounded-xl px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand/40 cursor-pointer"
                 >
                   <option value="Todas">Todas las Categorías</option>
-                  {["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"].map((c) => (
+                  {categoriasUnicas.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
@@ -2324,14 +2334,25 @@ export default function AdminLukePage() {
                   </label>
                   <select
                     value={productForm.categoria}
-                    onChange={(e) => setProductForm({ ...productForm, categoria: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "__NUEVA__") {
+                        const nueva = window.prompt("Ingresa el nombre de la nueva categoría comercial:");
+                        if (nueva && nueva.trim()) {
+                          setProductForm({ ...productForm, categoria: nueva.trim() });
+                        }
+                      } else {
+                        setProductForm({ ...productForm, categoria: val });
+                      }
+                    }}
                     className="w-full bg-bg-surface-2 border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary focus:border-brand/50 focus:outline-none transition-colors cursor-pointer"
                   >
-                    {["Abarrotes", "Confites", "Limpieza", "Verdulería", "Bebidas"].map((c) => (
+                    {categoriasUnicas.map((c) => (
                       <option key={c} value={c}>
                         {c}
                       </option>
                     ))}
+                    <option value="__NUEVA__">+ Crear nueva categoría...</option>
                   </select>
                 </div>
                 <div>
